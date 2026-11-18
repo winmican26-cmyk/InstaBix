@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db, withOrg } from "@/lib/db";
 import { memberships, orgs, users, type User } from "@/lib/db/schema";
-import { createSession, destroySession, getSessionUser } from "@/lib/auth/session";
+import { clearSessionCookie, createSession, destroySession, getSessionUser } from "@/lib/auth/session";
 import { hashPassword, passwordIssues, verifyPassword } from "@/lib/auth/password";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { insertAudit } from "@/lib/audit";
@@ -17,8 +17,12 @@ export type AuthState = { error?: string; fieldErrors?: Record<string, string> }
 
 const DB_UNAVAILABLE_ERROR = "The database is unavailable. Please try again shortly.";
 
-function dbUnavailable(event: string, error: unknown): AuthState {
+function logDbFailure(event: string, error: unknown): void {
   logger.error(event, { message: error instanceof Error ? error.message : "unknown" });
+}
+
+function dbUnavailable(event: string, error: unknown): AuthState {
+  logDbFailure(event, error);
   return { error: DB_UNAVAILABLE_ERROR };
 }
 
@@ -187,8 +191,20 @@ export async function signupAction(_prev: AuthState, formData: FormData): Promis
 }
 
 export async function signOutAction(): Promise<void> {
-  const session = await getSessionUser();
-  await destroySession();
+  let session: Awaited<ReturnType<typeof getSessionUser>> = null;
+  try {
+    session = await getSessionUser();
+  } catch (error) {
+    logDbFailure("auth.logout.session_lookup_failed", error);
+  }
+
+  try {
+    await destroySession();
+  } catch (error) {
+    logDbFailure("auth.logout.session_destroy_failed", error);
+  }
+  await clearSessionCookie();
+
   if (session) logger.info("auth.logout", { userId: session.user.id });
   redirect("/login");
 }

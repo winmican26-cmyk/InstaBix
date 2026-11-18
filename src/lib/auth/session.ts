@@ -45,6 +45,12 @@ export async function destroySession(): Promise<void> {
   jar.delete(COOKIE);
 }
 
+/** Clears only the session cookie, without touching the database. */
+export async function clearSessionCookie(): Promise<void> {
+  const jar = await cookies();
+  jar.delete(COOKIE);
+}
+
 export const getSessionUser = cache(async (): Promise<{ user: User; orgId: string | null; tokenHash: string } | null> => {
   const jar = await cookies();
   const token = jar.get(COOKIE)?.value;
