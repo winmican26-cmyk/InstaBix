@@ -98,4 +98,4 @@
 - No Playwright E2E, Lighthouse, load test, backup/restore drill, security review, or App Review recording was performed.
 - No clean-clone CI run was performed.
 - No cross-tenant isolation test was re-run.
-- No Git commit or remote push was made; the working tree remains uncommitted on `main` with no remote.
+- Git commit and remote push were not part of the original verification session; they were completed afterward as root commit `9d74ad8` on `main`, pushed to `origin/main`.

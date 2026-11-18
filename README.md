@@ -192,7 +192,7 @@ This runs root typecheck, lint, Vitest tests, and the production build. Session 
 - No Whop sandbox publish: sandbox key required.
 - No Playwright E2E, Lighthouse budgets, load test, backup/restore drill, security review, or App Review recording.
 - Root surfaces compile and pass unit tests but were not runtime-reverified against populated real rows in the documented session.
-- Git working tree was uncommitted on `main` with no remote at the time of documentation.
+- Git working tree was uncommitted on `main` with no remote at the time of documentation; it has since been committed as `9d74ad8` and pushed to `origin/main`.
 
 ## 9. Documentation index
 

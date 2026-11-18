@@ -139,8 +139,8 @@ git remote -v
 git check-ignore -v backend/.venv backend/instabix.db backend/__pycache__ reference/kit/App.tsx
 ```
 
-- Working tree: uncommitted on `main`.
-- Remotes: none.
+- Documentation-time working tree: uncommitted on `main`; no remote was configured.
+- Post-push state: clean `main` tracking `origin/main` at `9d74ad8`; remote `origin` is `https://github.com/winmican26-cmyk/InstaBix.git`.
 - Ignore check: `backend/.venv`, `backend/instabix.db`, `backend/__pycache__`, and `reference/kit/App.tsx` all confirmed ignored.
 - `.gitignore` covers `node_modules`, `.next`, `.venv`, `__pycache__`, `*.pyc`, `*.db`, `.env` variants, `reference/`, and generated output paths.
 
