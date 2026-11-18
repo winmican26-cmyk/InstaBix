@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="InstaBix">
+  <rect width="64" height="64" rx="15" fill="#0A0A0F"/>
+  <path d="M32 13a19 19 0 0 1 16.45 9.5" stroke="#C6FF4A" stroke-width="7" stroke-linecap="round" fill="none"/>
+  <path d="M48.45 22.5A19 19 0 0 1 32 51" stroke="#8B5CF6" stroke-width="7" stroke-linecap="round" fill="none"/>
+  <path d="M32 51a19 19 0 0 1-16.45-28.5" stroke="#C6FF4A" stroke-width="7" stroke-linecap="round" fill="none"/>
+  <circle cx="32" cy="32" r="4.5" fill="#F4F4F8"/>
+</svg>

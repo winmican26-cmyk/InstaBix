@@ -1,0 +1,177 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  --bg: 10 10 15;
+  --surface: 16 16 23;
+  --surface-2: 22 22 31;
+  --surface-3: 28 28 39;
+  --line: 38 38 51;
+  --line-2: 52 52 66;
+  --fg: 244 244 248;
+  --muted: 166 166 184;
+  --faint: 120 120 138;
+  --lime: 198 255 74;
+  --accent-fg: 10 10 15;
+  --violet: 139 92 246;
+  --amber: 255 194 74;
+  --danger: 255 107 107;
+  --info: 90 168 255;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: 249 249 252;
+  --surface: 255 255 255;
+  --surface-2: 244 244 248;
+  --surface-3: 237 237 243;
+  --line: 226 226 234;
+  --line-2: 206 206 218;
+  --fg: 17 17 26;
+  --muted: 88 88 105;
+  --faint: 118 118 136;
+  --lime: 63 107 0;
+  --accent-fg: 255 255 255;
+  --violet: 109 40 217;
+  --amber: 158 92 0;
+  --danger: 190 30 45;
+  --info: 29 78 216;
+}
+
+* {
+  border-color: rgb(var(--line));
+}
+
+html {
+  background: rgb(var(--bg));
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: rgb(var(--bg));
+  color: rgb(var(--fg));
+  font-feature-settings: "cv11", "ss01";
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: rgb(var(--lime));
+  color: rgb(var(--accent-fg));
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--line));
+  border-radius: 99px;
+  border: 2px solid rgb(var(--bg));
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--line-2));
+}
+
+:focus-visible {
+  outline: 2px solid rgb(var(--lime));
+  outline-offset: 2px;
+}
+
+@layer base {
+  h1, h2, h3, h4 {
+    font-family: var(--font-display), var(--font-sans), system-ui, sans-serif;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+  code, kbd, pre, .mono {
+    font-family: var(--font-mono), ui-monospace, SFMono-Regular, monospace;
+  }
+  input, textarea, select, button {
+    font: inherit;
+  }
+}
+
+@layer components {
+  .app-canvas {
+    background-image:
+      radial-gradient(900px 500px at 12% -10%, rgb(var(--violet) / 0.10), transparent 60%),
+      radial-gradient(700px 420px at 100% 0%, rgb(var(--lime) / 0.05), transparent 55%);
+    background-repeat: no-repeat;
+  }
+
+  .card {
+    @apply rounded-lg border border-line bg-surface;
+    box-shadow: 0 1px 0 0 rgb(255 255 255 / 0.035) inset;
+  }
+
+  .card-interactive {
+    @apply rounded-lg border border-line bg-surface transition-colors duration-150 hover:border-line-2 hover:bg-surface-2/60;
+  }
+
+  .label {
+    @apply text-[11px] font-medium uppercase tracking-[0.14em] text-faint;
+  }
+
+  .hairline {
+    height: 1px;
+    background: linear-gradient(to right, transparent, rgb(var(--line)), transparent);
+  }
+
+  .kbd {
+    @apply inline-flex h-5 min-w-5 items-center justify-center rounded border border-line bg-surface-2 px-1 font-mono text-[10px] font-medium text-muted;
+  }
+
+  .grid-lines {
+    background-image:
+      linear-gradient(rgb(var(--line) / 0.5) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(var(--line) / 0.5) 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, black, transparent 75%);
+  }
+
+  .shimmer {
+    position: relative;
+    overflow: hidden;
+    background: rgb(var(--surface-2));
+  }
+  .shimmer::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, rgb(var(--line) / 0.6), transparent);
+    animation: shimmer 1.8s infinite;
+  }
+
+  .prose-legal p {
+    @apply mb-4 text-[15px] leading-7 text-muted;
+  }
+  .prose-legal h2 {
+    @apply mb-3 mt-8 text-xl font-semibold text-fg;
+  }
+  .prose-legal ul {
+    @apply mb-4 list-disc space-y-2 pl-5 text-[15px] leading-7 text-muted;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}

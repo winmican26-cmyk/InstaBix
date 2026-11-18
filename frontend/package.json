@@ -1,0 +1,26 @@
+{
+  "name": "instabix-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "InstaBix operator dashboard starter backed by the FastAPI service.",
+  "scripts": {
+    "dev": "next dev -p 3100",
+    "build": "node scripts/build.mjs",
+    "start": "next start -p 3100",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "next": "16.4.6",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.2.6",
+    "@types/react-dom": "^19.2.3",
+    "typescript": "5.9.3"
+  },
+  "engines": {
+    "node": ">=20.9.0"
+  }
+}

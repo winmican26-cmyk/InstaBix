@@ -1,0 +1,194 @@
+"use server";
+
+import { eq, sql } from "drizzle-orm";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { z } from "zod";
+import { db, withOrg } from "@/lib/db";
+import { memberships, orgs, users, type User } from "@/lib/db/schema";
+import { createSession, destroySession, getSessionUser } from "@/lib/auth/session";
+import { hashPassword, passwordIssues, verifyPassword } from "@/lib/auth/password";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { insertAudit } from "@/lib/audit";
+import { logger } from "@/lib/logger";
+import { slugify } from "@/lib/utils";
+
+export type AuthState = { error?: string; fieldErrors?: Record<string, string> };
+
+const DB_UNAVAILABLE_ERROR = "The database is unavailable. Please try again shortly.";
+
+function dbUnavailable(event: string, error: unknown): AuthState {
+  logger.error(event, { message: error instanceof Error ? error.message : "unknown" });
+  return { error: DB_UNAVAILABLE_ERROR };
+}
+
+const emailSchema = z.string().trim().toLowerCase().email("Enter a valid email address.");
+
+export async function loginAction(_prev: AuthState, formData: FormData): Promise<AuthState> {
+  const email = String(formData.get("email") ?? "");
+  const password = String(formData.get("password") ?? "");
+
+  const parsed = emailSchema.safeParse(email);
+  if (!parsed.success) return { fieldErrors: { email: "Enter a valid email address." } };
+  if (!password) return { fieldErrors: { password: "Enter your password." } };
+
+  const h = await headers();
+  const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "local";
+
+  let limit: Awaited<ReturnType<typeof checkRateLimit>>;
+  try {
+    limit = await checkRateLimit(`login:${ip}:${parsed.data}`, 8, 15 * 60);
+  } catch (error) {
+    return dbUnavailable("auth.login.rate_limit_failed", error);
+  }
+  if (!limit.ok) return { error: `Too many attempts. Try again in ${Math.ceil(limit.retryAfterSeconds / 60)} minutes.` };
+
+  let user: User | undefined;
+  try {
+    [user] = await db.select().from(users).where(eq(users.email, parsed.data)).limit(1);
+  } catch (error) {
+    return dbUnavailable("auth.login.lookup_failed", error);
+  }
+  const generic = { error: "Email or password is incorrect." };
+  if (!user) return generic;
+
+  const valid = await verifyPassword(password, user.passwordHash);
+  if (!valid) return generic;
+
+  let hasMembership = false;
+  let orgId: string | null = null;
+  try {
+    const rows = await db
+      .select({ orgId: memberships.orgId })
+      .from(memberships)
+      .where(eq(memberships.userId, user.id))
+      .limit(1);
+
+    hasMembership = rows.length > 0;
+    orgId = rows[0]?.orgId ?? null;
+    await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, user.id));
+    await createSession(user.id, orgId);
+    await createSessionAudit(orgId, user.id, ip);
+  } catch (error) {
+    return dbUnavailable("auth.login.session_failed", error);
+  }
+  redirect(hasMembership ? "/dashboard" : "/onboarding");
+}
+
+async function createSessionAudit(orgId: string | null, userId: string, ip: string) {
+  if (!orgId) return;
+  try {
+    await withOrg(orgId, async (tx) => {
+      await insertAudit(tx, { orgId, actorUserId: userId, action: "auth.login", entityType: "session", ip });
+    });
+  } catch (error) {
+    logger.warn("audit.login_failed", { message: error instanceof Error ? error.message : "unknown" });
+  }
+}
+
+const signupSchema = z.object({
+  name: z.string().trim().min(2, "Tell us your name.").max(80),
+  email: emailSchema,
+  password: z.string().min(1, "Choose a password."),
+  orgName: z.string().trim().min(2, "Name your workspace.").max(80),
+});
+
+export async function signupAction(_prev: AuthState, formData: FormData): Promise<AuthState> {
+  if (formData.get("terms") !== "on") {
+    return { fieldErrors: { terms: "You must accept the terms to create a workspace." } };
+  }
+
+  const raw = {
+    name: String(formData.get("name") ?? ""),
+    email: String(formData.get("email") ?? ""),
+    password: String(formData.get("password") ?? ""),
+    orgName: String(formData.get("orgName") ?? ""),
+  };
+  const parsed = signupSchema.safeParse(raw);
+  if (!parsed.success) {
+    const fieldErrors: Record<string, string> = {};
+    for (const issue of parsed.error.issues) {
+      const key = String(issue.path[0] ?? "form");
+      if (!fieldErrors[key]) fieldErrors[key] = issue.message;
+    }
+    return { fieldErrors };
+  }
+
+  const issues = passwordIssues(parsed.data.password);
+  if (issues.length) return { fieldErrors: { password: issues.join(" ") } };
+
+  let existing: { id: string }[];
+  try {
+    existing = await db.select({ id: users.id }).from(users).where(eq(users.email, parsed.data.email)).limit(1);
+  } catch (error) {
+    return dbUnavailable("auth.signup.lookup_failed", error);
+  }
+  if (existing.length) return { fieldErrors: { email: "An account already exists for this email." } };
+
+  const h = await headers();
+  const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "local";
+  let limit: Awaited<ReturnType<typeof checkRateLimit>>;
+  try {
+    limit = await checkRateLimit(`signup:${ip}`, 5, 60 * 60);
+  } catch (error) {
+    return dbUnavailable("auth.signup.rate_limit_failed", error);
+  }
+  if (!limit.ok) return { error: "Too many workspaces created from this network. Try again later." };
+
+  const passwordHash = await hashPassword(parsed.data.password);
+  const baseSlug = slugify(parsed.data.orgName) || "workspace";
+  const slug = `${baseSlug}-${Math.random().toString(36).slice(2, 6)}`;
+
+  let userId: string;
+  try {
+    userId = await db.transaction(async (tx) => {
+      const [user] = await tx
+        .insert(users)
+        .values({ email: parsed.data.email, name: parsed.data.name, passwordHash })
+        .returning({ id: users.id });
+      if (!user) throw new Error("User insert failed.");
+
+      const [org] = await tx
+        .insert(orgs)
+        .values({ name: parsed.data.orgName, slug, settings: { onboardingComplete: false, defaultSplitCreatorBps: 6000 } })
+        .returning({ id: orgs.id });
+      if (!org) throw new Error("Organisation insert failed.");
+
+      await tx.insert(memberships).values({ orgId: org.id, userId: user.id, role: "owner" });
+      await tx.execute(sql`select set_config('app.org_id', ${org.id}, true)`);
+      await insertAudit(tx, {
+        orgId: org.id,
+        actorUserId: user.id,
+        action: "org.created",
+        entityType: "org",
+        entityId: org.id,
+        metadata: { name: parsed.data.orgName },
+        ip,
+      });
+      return user.id;
+    });
+  } catch (error) {
+    logger.error("signup.failed", { message: error instanceof Error ? error.message : "unknown" });
+    return { error: "Could not create your workspace. Please try again." };
+  }
+
+  try {
+    await createSession(userId, null);
+    const [membership] = await db.select({ orgId: memberships.orgId }).from(memberships).where(eq(memberships.userId, userId)).limit(1);
+    if (membership) {
+      // Re-issue with the org bound so the first render is already tenant-scoped.
+      await destroySession();
+      await createSession(userId, membership.orgId);
+    }
+  } catch (error) {
+    return dbUnavailable("auth.signup.session_failed", error);
+  }
+  redirect("/onboarding");
+}
+
+export async function signOutAction(): Promise<void> {
+  const session = await getSessionUser();
+  await destroySession();
+  if (session) logger.info("auth.logout", { userId: session.user.id });
+  redirect("/login");
+}
