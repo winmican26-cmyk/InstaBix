@@ -187,6 +187,15 @@
 - Schema addition is additive and keeps 33 tables: `users.email_verified_at`, `creator_accounts.user_id` with FK and index, applied by `drizzle/0005_creator_signup.sql`. No enum, split, money or branding rule changed; the forbidden legacy brand is not emitted anywhere.
 - Seeded data is still operator-only (`scripts/seed.ts`); no demo creator or fabricated metric is introduced.
 
+## D22 — Postman, setup, and dashboard wireframe (blocks 10–12) reconciliation (2026-11-19)
+
+- These three pasted blocks are stale legacy reference, not a patch. A read-only comparison against the shipped tree found no functional gap. No application code changed; only this decision, `EVIDENCE.md` section 14, `TRACEABILITY.md` section 11 and `README.md` section 7h record the verdict. No legacy-branded filenames or variable names were adopted.
+- Postman: the authoritative files are `postman/Instabix.postman_collection.json`, `postman/Instabix.postman_environment.json` and `postman/README.md`. They use `baseUrl=http://localhost:8000`, contain 13 requests covering the 13 D17 endpoint paths once each, and carry no credentials. The pasted 14-line run repeats scout/classify/publish variants, omits the creator approval/list and webhook stub requests, and was not adopted.
+- Setup: shipped configuration uses `WHOP_ACCOUNT_ID` (not `WHOP_COMPANY_ID`), `ANTHROPIC_API_KEY` (not `OPENAI_API_KEY`), `EMAIL_FROM_DOMAIN` with no `EMAIL_FROM_NAME` node, SQLite locally with optional Postgres via `DATABASE_URL`, and the frontend on port 3100. The pasted `001_initial.sql`/`psql -f` path maps to the existing `backend/migrations/0001_stage2.sql` plus the idempotent `backend/app/migrate.py` runner; a duplicate initial DDL was not added.
+- Whop safety: mock mode is available only outside production and is disabled when production has no key. The pasted publish curl does not describe the shipped contract: a request must resolve a real, creator-approved product, the stored ordinal decides 60/40 versus 50/50, and no URL is fabricated. An uncreated `prod_1` or an unapproved row cannot be expected to return `whop_url` and a decimal split.
+- Dashboard wireframe: the pasted hard-coded figures, example product word count and “Build Kit” tab are legacy artifacts explicitly excluded by `BUILD_PROMPT.md` and `AUDIT.md`. The shipped dashboard derives every card from org-scoped database rows, measures word counts on save, stores sequences and daily caps as real rows, keeps human approval and suppression gates, and reports locked config values from `GET /api/settings` rather than a client banner.
+- No new endpoint, environment variable, migration, navigation item, demo row or fabricated metric was introduced. Existing locks from D03, D05, D06, D08, D17, D19 and D20 remain unchanged.
+
 ## Deliberately not done in this session
 
 - No legacy kit code was imported, adapted into production, or shipped.

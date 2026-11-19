@@ -244,6 +244,12 @@ Creators can register a real account at `/creator/signup`. It files the same con
 - Email is recorded as **unverified** (`users.emailVerifiedAt IS NULL`). Verification delivery is intentionally deferred until a mail provider is configured; no verified state is fabricated.
 - Registration is limited to 5 attempts per network per hour and uses the same scrypt password policy as operator signup. See `DECISIONS.md` D21, `EVIDENCE.md` section 13 and `TRACEABILITY.md` section 10.
 
+## 7h. Postman, setup, and dashboard wireframe (blocks 10–12)
+
+The newly pasted Postman guide, setup commands and dashboard wireframe are stale legacy reference, not a patch. No application code changed: the shipped Postman collection already covers the 13 authoritative endpoint paths with `baseUrl`, the setup docs already use the correct env names, port 3100 and the existing migration runner, and the real dashboard derives every figure from workspace rows.
+
+The pasted `WHOP_COMPANY_ID`, `OPENAI_API_KEY`, `EMAIL_FROM_NAME`, `001_initial.sql`, port 3000, repeat-variant request list and unconditional mock claim were not adopted. Publish still requires a real creator-approved product and a server-derived split; no URL is fabricated. Hard-coded scout/outreach figures, an example word count and a “Build Kit” tab remain explicitly rejected; locked config values come from `GET /api/settings`, not a client banner. See `DECISIONS.md` D22, `EVIDENCE.md` section 14 and `TRACEABILITY.md` section 11.
+
 ## 8. Known blockers
 
 - No clean-clone CI run has been demonstrated.

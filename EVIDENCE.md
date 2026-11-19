@@ -539,3 +539,36 @@ First pass: **REQUEST-CHANGES**. The judge found two real authorization gaps tha
 Resolution: added the pure allowlist plus `hasOperatorMembership()` in `src/lib/auth/roles.ts`; both entry points now reject creator-only sessions; `setActiveOrg()` also rejects creator memberships. The judge's non-blocking notes were also fixed: the duplicate-handle pre-check now binds `app.org_id` through `withOrg()`, omitted `niche` is coerced before Zod, and the portal's no-linked-application state no longer links back to the signup page that would redirect it away. Tests grew from 66 to 70 to cover the allowlist and both entry-point guards.
 
 Second pass: **ACCEPT**. The independent judge re-ran read-only typecheck/lint/diff checks, counted 70 `it()` cases across 7 files, and swept every remaining `getSessionUser()`/`requireUser()` site. Final table: all 14 checks PASS, including no creator access to operator data or owner self-elevation, fail-closed allowlist, transaction atomicity, honest unverified email, RLS-bound dedupe, portal isolation, schema/migration consistency and no mock data. `backend/**` and `frontend/**` remain untouched. The only residual observation is a non-blocking redirect loop for a role string that cannot exist under the current Postgres enum; it grants no access.
+
+## 14. Postman, setup, and dashboard wireframe audit (2026-11-19)
+
+D22 in `DECISIONS.md` records the verdict. Blocks 10–12 were treated as stale reference. No application code changed; the only changes are the four documentation records for this reconciliation.
+
+| Pasted item | Verdict | Shipped evidence |
+| --- | --- | --- |
+| Legacy-branded Postman filenames and `base_url` | Rejected | `postman/README.md:5-14` names `Instabix.postman_collection.json` / `Instabix.postman_environment.json`, uses `baseUrl`, and documents the 13-request order; `postman/Instabix.postman_environment.json:4-9` sets `baseUrl=http://localhost:8000` with empty `apiKey` and no secret |
+| Claimed 14-request run with repeated scout/classify/publish variants | Superseded | A JSON parse of the shipped collection returned 13 requests; `TRACEABILITY.md:92-106` maps exactly the 13 D17 paths, including creator approval/list and the 501 webhook stub that the pasted run omits |
+| Postman safety notes | Present | `postman/README.md:20-23` — draft-only outreach, server-derived split ordinal, no fabricated URL in mock mode, webhook 501, no credentials in the collection |
+| `WHOP_COMPANY_ID`, `OPENAI_API_KEY`, `EMAIL_FROM_NAME` | Rejected | `backend/.env.example:22-37` and `backend/app/config.py:72-77` use `EMAIL_FROM_DOMAIN`, `WHOP_API_KEY`, `WHOP_ACCOUNT_ID` and the `/api/v1` base; `README.md:139,146-163` maps `ANTHROPIC_API_KEY` and the complete backend env contract |
+| `psql $DATABASE_URL -f backend/migrations/001_initial.sql` | Rejected | `backend/migrations/0001_stage2.sql` is the authoritative six-table DDL; `backend/app/migrate.py:1-8` applies additive changes idempotently at runtime; `README.md:206` records both. No `001_initial.sql` exists in the tracked tree |
+| Frontend on port 3000 | Rejected | `frontend/README.md:34,38-40` and `README.md:101-110` run the starter on 3100 so the root app can stay on 3000 |
+| “Mock mode works without a key” as a universal rule | Constrained | `backend/.env.example:3-4,34-37` and `backend/app/config.py:103-115` select mock only outside production; a missing key in production disables publishing (503) rather than fabricating data |
+| Publish curl using `prod_1` and expecting a URL plus `0.60` | Rejected as written | `backend/app/main.py:961-988` requires a real product row, `validate_publishable`, and `creator_approved`/`live` status, then ignores client `is_first_product`; `backend/tests/test_api.py:267-275` proves the unapproved path is 409 `publish_blocked`; `backend/tests/test_stage3_api.py:320-329` proves a later product returns a 50/50 split despite a client `true`; `backend/tests/test_stage3_helpers.py:176-193` proves mock get invents no URL, price or plan |
+| Hard-coded scout/outreach/studio figures and example product word count | Rejected | `BUILD_PROMPT.md:13-18` lists those values on the hard-delete list; `AUDIT.md:20-30` maps each legacy presentation to real API/DB-backed behavior; `src/lib/db/queries.ts:27-92` computes creator/message/product/ledger stats from org-scoped rows; `src/app/(app)/dashboard/page.tsx:101,145-177,180-186,204-209` renders those rows with provenance and an explicit empty state |
+| “Build Kit” tab | Rejected | `src/lib/constants.ts:6-30` defines the real navigation (Dashboard, Creators, Outreach, Product Studio, Revenue, Integrations, Audit log, Settings); no Build Kit route exists. `AUDIT.md:26` records the legacy view's replacement by the real schema, migrations and `/docs` |
+| Client config banner with hard-coded niches, split, email and branding | Rejected | `backend/app/main.py:222-236` reports branding, niches, split payload, Whop mode, email domain and daily cap from server state; `frontend/app/page.tsx:296-318` renders those values from `/api/settings` and states that nothing there is hard-coded |
+| Sequence days, open/reply rates, templates, cap and human approval | Real rows/gates only | `src/app/(app)/outreach/page.tsx:44,95,105,132,151,240-241` shows stored steps, stored caps, explicit approval blocks and suppression; `src/app/(app)/studio/page.tsx:47-48,58,122-123` disables generation without a provider and measures word counts on save instead of accepting an example value |
+
+**Verdict:** no genuine functional gap, no atom and no production change. The shipped collection, setup docs, migration runner, publish gates and real-data dashboard already answer the pasted blocks under the stronger D01/D03/D05/D06/D08/D17/D19/D20 contract.
+
+### 14.1 Deterministic gates
+
+```text
+npm run verify    typecheck clean; lint clean; 7 files / 70 tests passed; production build compiled successfully
+backend pytest   177 passed, 1 warning in 12.33s (Starlette/httpx deprecation notice)
+backend compileall clean
+git diff --check  clean (only Git's LF-to-CRLF normalization warning on the four edited markdown files)
+legacy-brand audit  derived_pattern_length=12; shipped_scope_files=231; forbidden_hits=0
+```
+
+`git status --short` shows only `DECISIONS.md`, `EVIDENCE.md`, `README.md` and `TRACEABILITY.md` modified. No file under `src/`, `backend/`, `frontend/`, `postman/`, `drizzle/` or `tests/` changed. No real credentials or live provider calls were used.

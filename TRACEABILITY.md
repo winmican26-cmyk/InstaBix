@@ -151,3 +151,19 @@ D21 in `DECISIONS.md` records the design decisions; `EVIDENCE.md` section 13 hol
 | Login-to-application link | `creatorAccounts.userId` + `creators_user_idx` | Nullable FK with `ON DELETE SET NULL`; portal predicate |
 | Discovery | `src/app/apply/apply-form.tsx` | Optional "create a creator account" link before and after applying; `/apply` itself unchanged |
 | Tests | `tests/creator-signup.test.ts` | Validation, consent, password policy, role deny, applied state, and source guards against owner role / fake verification |
+
+## 11. Blocks 10–12 Postman, setup, and wireframe mapping (2026-11-19)
+
+D22 in `DECISIONS.md` records the verdict; `EVIDENCE.md` section 14 holds the exact file:line comparisons. These blocks are stale reference, not a patch. No application code changed.
+
+| Pasted item | Shipped counterpart / contract |
+| --- | --- |
+| Legacy-branded collection files, `base_url`, 14-line run | `postman/Instabix.postman_collection.json`, `postman/Instabix.postman_environment.json`, `postman/README.md` — `baseUrl`, 13 requests mapped once each in section 7; no credentials |
+| Scout/classify variants and two publish variants | One `POST /api/scout/search`, one `POST /api/outreach/classify`, one `POST /api/whop/publish`; route details in section 7 |
+| `WHOP_COMPANY_ID` / `OPENAI_API_KEY` / `EMAIL_FROM_NAME` | `WHOP_ACCOUNT_ID` / `ANTHROPIC_API_KEY` / `EMAIL_FROM_DOMAIN` in `backend/.env.example`, `backend/app/config.py` and `README.md` section 5 |
+| `001_initial.sql` via `psql -f` | `backend/migrations/0001_stage2.sql` (documentation DDL) plus `backend/app/migrate.py` (runtime additive runner) |
+| Frontend port 3000 | `frontend/README.md` and `frontend/package.json` — port 3100; root app remains on 3000 |
+| Unconditional mock mode and curl expecting a URL/split | `config.py:103-115` (mock only outside production), `main.py:961-988` (real product + approval gates), `tests/test_api.py:267-275`, `tests/test_stage3_api.py:320-329` |
+| Wireframe stats and word count | `src/lib/db/queries.ts:27-92` + `src/app/(app)/dashboard/page.tsx` — org-scoped counts and provenance; `src/app/(app)/studio/page.tsx` — measured word counts |
+| Build Kit tab | Not in `src/lib/constants.ts:6-30`; real schema and routes are exposed through `src/lib/db/schema.ts`, `drizzle/` and `/docs` |
+| Hard-coded config banner | `backend/app/main.py:222-236` → `GET /api/settings` → `frontend/app/page.tsx:296-318`; values are server-reported |
