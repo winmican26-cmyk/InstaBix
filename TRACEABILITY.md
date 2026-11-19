@@ -120,3 +120,16 @@ The pasted Section 7 code is legacy reference, not a production patch. D19 in `D
 | `calc_payouts(amount: float, ...)` | `calc_payouts(gross_cents: int, ...)` `whop.py:80-115` |
 | `_demo_products` + fabricated GET URL | Real DB `Product` + 409 gate `main.py:953-980`; mock projection without URL `whop.py:542-552` |
 | 3 stories + 2 captions | 4 story + 3 caption strings; 3 specs + 3 variations (`agent4.py:226-363`) |
+
+## 9. Blocks 8–9 frontend and migration reference mapping (2026-11-19)
+
+The pasted frontend starter and SQL migration are legacy reference. D20 in `DECISIONS.md` and `EVIDENCE.md` section 12 record the verdict. No code changed.
+
+| Reference | Shipped counterpart |
+| --- | --- |
+| Reference package name / Next 14 / React 18 / port 3000 | `frontend/package.json:2,7-15` — InstaBix name, Next 16.4.6, React 19.3.1, port 3100 |
+| Toy page (three fetch comments) | `frontend/app/page.tsx` — seven parallel API calls, unreachable guard, no sample figures |
+| `001_initial.sql` + `psql -f` | `backend/migrations/0001_stage2.sql` (docs DDL) + `backend/app/migrate.py` (runtime additive runner) |
+| Six tables including settings | `0001_stage2.sql:8,52,70,116,141,173` — same table set with indexes and CHECKs |
+| UUID PKs, NUMERIC authority, `calc_split()` | INTEGER PKs, integer cents/bps authoritative + decimal mirrors, ordinal derived `main.py:842-860` |
+| Demo creator/product seed | None shipped; real rows only |

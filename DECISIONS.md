@@ -166,6 +166,15 @@
 - Story/caption counts: the reference 3 stories + 2 captions matches no shipped array and is a style difference, not a functional gap. Shipped stores and renders 4 story + 3 caption strings (`agent4.py:226-258,300-344`) plus 3 compact story specs and 3 caption variations. D17 already locked the flat keys as string renderings of structured assets with disclosure preserved; that contract is unchanged.
 - Residual `(Next)` items (webhook 501, in-memory audit/notifications, sandbox verification) are deferred cuts, not reference features; none is needed to satisfy this comparison.
 
+## D20 — Frontend starter and SQL migration reference (blocks 8–9) reconciliation (2026-11-19)
+
+- The pasted `frontend/package.json` and toy page are the excluded legacy reference. Shipped `frontend/package.json` uses the InstaBix package name, Next 16.4.6 / React 19.3.1 (newer, not downgraded), port 3100 and explicit `dev`/`build`/`start`/`typecheck` scripts. The shipped `frontend/app/page.tsx` already fetches all seven backend surfaces in parallel, renders a full dashboard, shows no figures when health fails, and never substitutes sample data. No code change was warranted.
+- The reference `backend/migrations/001_initial.sql` maps to the existing `backend/migrations/0001_stage2.sql`, which already defines the same six tables (creators, campaigns, products, emails, sales, settings) plus indexes and CHECK constraints. The backend applies additive schema changes at runtime via `backend/app/migrate.py`; the SQL file is documentation DDL. A second initial migration was not added.
+- The niche vocabulary is identical in both ('Sports', 'Home', 'Finance', 'Parenting', 'AI Tools for Small Business', 'Faith & Mindset'), so no vocabulary change was needed.
+- Reference UUID primary keys, NUMERIC-authoritative `price`/`split_*`, `status DEFAULT 'Qualified'` without a locked set, and a `calc_split(is_first BOOLEAN)` SQL function are rejected. Shipped uses INTEGER ids, authoritative `price_cents`/`split_*_bps` with decimal mirrors only, the locked seven-value creator status set defaulting to `New`, and server-derived ordinal split logic (`main.py:842-860`) with a 409 `split_rule_mismatch` on client override. No `calc_split()` function or triggers were added.
+- The reference seed (six demo creators and one demo product ready to publish) is rejected outright: no demo or fabricated rows ship in production. A repo-wide search for those handles and the demo product title found no shipped data rows.
+- Client-supplied `is_first_product` remains advisory: the count-derived ordinal is stored and the publish request field is deliberately ignored (`main.py:982`).
+
 ## Deliberately not done in this session
 
 - No legacy kit code was imported, adapted into production, or shipped.

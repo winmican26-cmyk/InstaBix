@@ -483,3 +483,23 @@ The pasted `https://api.whop.com/v5` is therefore a legacy path. Shipped `config
 | `qualifies()`-based scout search | Aliased | Pure stored-row `search_creators` `agent1.py:447-502`; route `main.py:526-546` |
 
 **Verdict:** no genuine functional gap and no atom required. Known residuals (`POST /api/whop/webhook` 501 stub, in-memory audit/notifications, sandbox verification) are deferred cuts already recorded in §8.4, not missing reference features. The forbidden brand token was never written; docs refer to it only as "the forbidden legacy brand".
+
+## 12. Frontend starter and SQL migration reference audit (2026-11-19)
+
+D20 in `DECISIONS.md` records the verdict. The pasted blocks 8–9 were treated as legacy reference, not a patch. The audit changed no files and no production code change was warranted.
+
+| Pasted item | Verdict | Shipped evidence |
+| --- | --- | --- |
+| Reference package name, Next 14.2.0 / React 18.3.1, port 3000 | Rejected | `frontend/package.json:2,7-15` — InstaBix name, Next 16.4.6, React 19.3.1, port 3100, typecheck script |
+| Toy page shell with three fetch comments | Superseded | `frontend/app/page.tsx:10-323` fetches health/scout/outreach/products/whop/revenue/settings in parallel; `Unreachable` guard at 325-342; empty states; no sample figures |
+| `001_initial.sql` + `psql -f` runner | Aliased | `backend/migrations/0001_stage2.sql` is documentation DDL; `backend/app/migrate.py:1-8` applies idempotent additive migrations at runtime |
+| Table set (six tables + settings) | Present | `0001_stage2.sql:8,52,70,116,141,173` — creators, campaigns, products, emails, sales, settings; indexes and CHECK constraints throughout |
+| Niche CHECK list | Present (identical) | `0001_stage2.sql:37-40`; `config.py:16-23` |
+| UUID primary keys | Rejected | `0001_stage2.sql:9,53,71` INTEGER PKs; integer ids in `models.py` |
+| NUMERIC price/split authoritative | Rejected | `0001_stage2.sql:76-82` `price_cents`/`split_*_bps` authoritative, decimal mirrors with CHECK at 103-108; `calc_payouts` `whop.py:80-115` |
+| `status DEFAULT 'Qualified'`, no CHECK | Rejected | `0001_stage2.sql:27,41-44` default `New` + locked seven-value CHECK; `config.py:29-37` |
+| `calc_split(is_first BOOLEAN)` function | Rejected | No SQL function in shipped tree; ordinal derived `main.py:842-860`; mismatch → 409 `split_rule_mismatch`; split math `whop.py:66-115` |
+| Six demo creators + one demo product seed | Rejected | Repo-wide search for the reference handles and product title found no shipped rows |
+| `is_first_product BOOLEAN DEFAULT TRUE` as client authority | Constrained | Column retained as stored ordinal (`0001_stage2.sql:78`); publish ignores the request field (`main.py:982`) |
+
+**Verdict:** no genuine functional gap and no atom required. The reference triggers and full 200-line DDL were not pasted and are not needed: CHECK constraints come from SQLAlchemy metadata and the additive migration runner.

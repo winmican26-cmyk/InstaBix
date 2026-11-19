@@ -227,6 +227,12 @@ The pasted Section 7 snippets are legacy reference, not a patch. An independent 
 
 Official Whop docs confirm the Current API base is `https://api.whop.com/api/v1` (sandbox `https://sandbox-api.whop.com/api/v1`) with `Authorization: Bearer` and a dated `Api-Version-Date` pin. The pasted `/v5` path, client-trusted splits, float money, demo products, operator-brand text and fabricated mock URLs were not adopted. The reference 3 stories + 2 captions is a style difference; shipped keeps 4 story + 3 caption strings plus 3 compact specs and 3 caption variations, with disclosure preserved (D17). See `DECISIONS.md` D19, `EVIDENCE.md` section 11 and `TRACEABILITY.md` section 8.
 
+## 7f. Frontend starter and SQL migration reference (blocks 8–9)
+
+The pasted frontend shell and SQL migration are legacy reference, not a patch. No code changed: the shipped frontend already has a full dashboard backed by seven live API surfaces (no sample figures), and `backend/migrations/0001_stage2.sql` already defines the same six tables plus indexes and CHECK constraints, applied idempotently by `backend/app/migrate.py`.
+
+Rejected from the reference: the old brand and framework pins, UUID ids, NUMERIC-authoritative money and splits, a client-bool `calc_split()` SQL function, permissive creator statuses, and the six demo creators plus one demo product. The niche vocabulary is already identical. Split ordinals remain derived from stored product counts (`main.py:842-860`) with a 409 on client override. See `DECISIONS.md` D20, `EVIDENCE.md` section 12 and `TRACEABILITY.md` section 9.
+
 ## 8. Known blockers
 
 - No clean-clone CI run has been demonstrated.
