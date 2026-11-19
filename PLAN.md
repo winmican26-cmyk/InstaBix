@@ -70,6 +70,19 @@ Stage 2 combined gates on 2026-11-19: backend `156 passed`, `compileall` clean; 
 
 Stage 2 residuals: `STEP_DELAY_DAYS` provides 0/3/7 dates but only day 0 is initialized — advancing `current_step` to 2/3 and recomputing `next_followup_at` is a separate atom. The 50/day cap, warmup, and real-provider credential gaps from Stage 1 remain unchanged. The root app still uses its own 33-table schema; no dual-write layer was added.
 
+## Stage 3 API surface and publish contract acceptance (2026-11-19)
+
+The pasted API endpoint table was implemented in the FastAPI backend with two independent producer/judge atoms. D17 in `DECISIONS.md` records the interpretation rulings (API-key-exempt health alias, creator approval mapped to `Qualified`, draft-only outreach send, client ordinal ignored, string-rendered assets, webhook deferred).
+
+| Atom | Final verdict | Core evidence |
+| --- | --- | --- |
+| STAGE3-HELPERS | ACCEPT | Pure stored-row `search_creators`, disclosure-preserving string renderers, secret-free `get_product` with no fabricated URL/price, 50/day cap config; 10 deterministic tests |
+| STAGE3-API | ACCEPT | All 13 spec routes present, exactly one publish route, exact flat publish contract with the client ordinal ignored, fail-closed 501 webhook, payouts and settings mirrors; 11 non-vacuous tests |
+
+Stage 3 combined gates on 2026-11-19: backend `177 passed` (156 pre-existing + 11 API + 10 helper), `PYTEST_EXIT=0`, `compileall` clean (`COMPILEALL_EXIT=0`); root `npm run verify` passed (`52 tests` + production build); frontend typecheck and production build clean; brand audit zero hits across root files, backend (excluding `.venv`), `.next` and frontend; live `/health` and `/api/health` both returned `status=ok`, `database=ok`.
+
+Stage 3 residuals: `POST /api/whop/webhook` is an explicit 501 `(Next)` stub — signature verification, idempotency and a sale/payout ledger remain a later cut; the live Whop adapter is still unverified without a sandbox key; the publish response's `is_first_product` is the server-derived value, never the client's; `email_domain` is `null` when unset; mock `get_product` intentionally exposes no URL.
+
 ## Verification strategy
 
 1. **Static gates:** root `npm run typecheck`, `npm run lint`, `npm run test`, `npm run build`; frontend `npm run typecheck`, `npm run build`; backend pytest and `compileall`.
@@ -80,7 +93,7 @@ Stage 2 residuals: `STEP_DELAY_DAYS` provides 0/3/7 dates but only day 0 is init
 
 ## Bounded next steps
 
-Already completed in this session: documentation package, frontend/backend independent judge passes, root regression fix and final verification, and the no-mock/brand audits. These are not open work items.
+Already completed in this session: documentation package, frontend/backend independent judge passes, root regression fix and final verification, no-mock/brand audits, and the Stage 1–3 producer/judge cycles. These are not open work items.
 
 Next bounded units, in order:
 

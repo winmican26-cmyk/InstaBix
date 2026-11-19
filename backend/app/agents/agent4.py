@@ -12,6 +12,7 @@ permission flag.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -373,6 +374,133 @@ def _launch_assets(bio_link: str, story_templates: list[dict[str, Any]],
         "launch_caption_variations": caption_variations,
         "launch_performance": track_launch_performance(product_id=None),
     }
+
+
+def _render_scalar(value: Any) -> str | None:
+    """Render a single scalar; nested dicts/lists are never stringified."""
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, str):
+        return value.strip() or None
+    if isinstance(value, (int, float)):
+        return str(value)
+    return None
+
+
+def _render_hashtags(value: Any) -> str | None:
+    if not isinstance(value, (list, tuple)):
+        return None
+    tags: list[str] = []
+    for item in value:
+        tag = _render_scalar(item)
+        if tag:
+            tags.append(tag)
+    return " ".join(tags) or None
+
+
+def _asset_collection(assets: dict | list, primary: str, fallback: str) -> list[Any]:
+    """Select the stored structured collection without duplicating its variants."""
+    if isinstance(assets, Mapping):
+        for key in (primary, fallback):
+            value = assets.get(key)
+            if isinstance(value, (list, tuple)):
+                return list(value)
+        # A single structured item may be passed directly instead of a bundle.
+        if any(key in assets for key in ("text", "hook", "body", "frame", "id")):
+            return [assets]
+        return []
+    if isinstance(assets, (list, tuple)):
+        return list(assets)
+    return []
+
+
+def _render_story_item(item: Any, index: int) -> str | None:
+    if isinstance(item, str):
+        text = item.strip()
+        return f"Story {index}: {text}" if text else None
+    if not isinstance(item, Mapping):
+        return None
+
+    label = (
+        _render_scalar(item.get("frame"))
+        or _render_scalar(item.get("id"))
+        or str(index)
+    )
+    chunks: list[str] = [f"Story {label}:"]
+    text = _render_scalar(item.get("text"))
+    if text:
+        chunks.append(text)
+    kind = _render_scalar(item.get("kind")) or _render_scalar(item.get("format"))
+    if kind:
+        chunks.append(f"({kind})")
+    sticker = _render_scalar(item.get("sticker"))
+    if sticker:
+        chunks.append(f"Sticker: {sticker}")
+    link = _render_scalar(item.get("link")) or _render_scalar(item.get("url"))
+    if link:
+        chunks.append(f"Link: {link}")
+    disclosure = _render_scalar(item.get("disclosure"))
+    if disclosure:
+        chunks.append(disclosure)
+    return " ".join(chunks)
+
+
+def _render_caption_item(item: Any) -> str | None:
+    if isinstance(item, str):
+        text = item.strip()
+        return f"NEW: {text}" if text else None
+    if not isinstance(item, Mapping):
+        return None
+
+    chunks: list[str] = ["NEW:"]
+    for key in ("hook", "title", "body", "cta"):
+        value = _render_scalar(item.get(key))
+        if value:
+            chunks.append(value)
+    hashtags = _render_hashtags(item.get("hashtags"))
+    if hashtags:
+        chunks.append(hashtags)
+    link = _render_scalar(item.get("link")) or _render_scalar(item.get("url"))
+    if link:
+        chunks.append(f"Link: {link}")
+    disclosure = _render_scalar(item.get("disclosure"))
+    if disclosure:
+        chunks.append(disclosure)
+    return " ".join(chunks)
+
+
+def render_story_templates(assets: dict | list) -> list[str]:
+    """Render stored story assets as readable strings, in storage order.
+
+    Works with a ``PublishOutcome.assets`` bundle, the direct structured list,
+    or the compact story-template specs. Disclosure and link text are copied
+    verbatim wherever the source carries them; no compliance content is dropped
+    and the structured assets are never mutated.
+    """
+    rendered: list[str] = []
+    for index, item in enumerate(
+        _asset_collection(assets, "story_templates", "story_template_specs"), start=1
+    ):
+        text = _render_story_item(item, index)
+        if text:
+            rendered.append(text)
+    return rendered
+
+
+def render_launch_captions(assets: dict | list) -> list[str]:
+    """Render stored launch captions as readable strings, in storage order.
+
+    Accepts a ``PublishOutcome.assets`` bundle, the direct caption list, or the
+    numbered caption variations. Disclosure, hashtags and links are preserved.
+    """
+    rendered: list[str] = []
+    for item in _asset_collection(
+        assets, "launch_captions", "launch_caption_variations"
+    ):
+        text = _render_caption_item(item)
+        if text:
+            rendered.append(text)
+    return rendered
 
 
 def publish_product(db: Session, product: Product, client: WhopClient) -> PublishOutcome:

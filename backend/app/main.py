@@ -77,11 +77,13 @@ from app.schemas import (
     ApprovalRequest,
     ClassifyRequest,
     OutreachCreate,
+    OutreachSendRequest,
     ProductCreate,
     PublishRequest,
     RefundRequest,
     SaleCreate,
     ScoutRequest,
+    ScoutSearchRequest,
     SettingsUpdate,
 )
 from app.security import require_api_key
@@ -93,6 +95,47 @@ logger = logging.getLogger(__name__)
 def _slug(title: str, creator_id: int) -> str:
     base = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:100] or "product"
     return f"{base}-{creator_id}-{secrets.token_hex(3)}"
+
+
+def _product_internal_id(value: int | str) -> int:
+    """Normalise an internal or external product id to the internal int id.
+
+    External ids use the ``prod_<id>`` form; a bare numeric string is also
+    accepted. Anything else is rejected before a database lookup occurs.
+    """
+    if isinstance(value, bool):
+        raise ValidationFailed("product_id must be an integer or 'prod_<id>'.")
+    text = str(value).strip()
+    if text.startswith("prod_"):
+        text = text[len("prod_") :]
+    try:
+        parsed = int(text)
+    except ValueError as exc:
+        raise ValidationFailed("product_id must be an integer or 'prod_<id>'.") from exc
+    if parsed <= 0:
+        raise ValidationFailed("product_id must be positive.")
+    return parsed
+
+
+def _external_product_id(product_id: int) -> str:
+    return f"prod_{int(product_id)}"
+
+
+def _string_list(value: Any) -> list[str]:
+    """Render launch assets as strings without altering stored structured data."""
+    if value is None:
+        return []
+    items = value if isinstance(value, (list, tuple)) else [value]
+    rendered: list[str] = []
+    for item in items:
+        if isinstance(item, str):
+            rendered.append(item)
+        elif isinstance(item, dict):
+            text = item.get("text") or item.get("body") or item.get("caption")
+            rendered.append(str(text) if text is not None else str(item))
+        else:
+            rendered.append(str(item))
+    return rendered
 
 
 def _split_payload() -> dict[str, Any]:
@@ -187,6 +230,10 @@ def _settings_payload(db: Session, settings: Settings, whop: WhopClient) -> dict
         "support_email": values.get("support_email", DEFAULT_SETTINGS["support_email"]),
         "outreach_paused": bool(values.get("outreach_paused", False)),
         "public_app_url": settings.public_app_url,
+        # Stage 3 config mirrors. ``getattr`` keeps the payload stable while
+        # the Stage 3 config keys are introduced by the config atom.
+        "email_domain": getattr(settings, "email_from_domain", ""),
+        "daily_cap": getattr(settings, "outreach_daily_cap", 50),
     }
 
 
@@ -337,6 +384,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "api_key_required": bool(settings.api_key),
         }
 
+    @app.get("/health")
+    def health_alias(db: Session = Depends(get_db)) -> dict[str, Any]:
+        """API-key-exempt alias of /api/health; the body is identical."""
+        return health(db)
+
     api = APIRouter(prefix="/api", dependencies=[Depends(require_api_key)])
 
     # ---- Scout -----------------------------------------------------------
@@ -350,6 +402,52 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             query = query.where(Creator.status == status)
         creators = db.scalars(query.order_by(Creator.created_at.desc())).all()
         return {"items": [creator.to_dict() for creator in creators], "count": len(creators)}
+
+    @api.get("/creators")
+    def list_creators_alias(
+        status: str | None = Query(default=None),
+        niche: str | None = Query(default=None),
+        db: Session = Depends(get_db),
+    ) -> dict[str, Any]:
+        """Stage 3 alias of the creator list with an additional niche filter."""
+        query = select(Creator)
+        if status:
+            query = query.where(Creator.status == status)
+        if niche:
+            query = query.where(Creator.niche == niche)
+        creators = db.scalars(query.order_by(Creator.created_at.desc())).all()
+        return {"items": [creator.to_dict() for creator in creators], "count": len(creators)}
+
+    @api.post("/creators/{creator_id}/approve")
+    def approve_creator(
+        creator_id: int,
+        payload: ApprovalRequest | None = None,
+        db: Session = Depends(get_db),
+    ) -> dict[str, Any]:
+        """Map 'approved for outreach' to the locked Stage 2 status vocabulary."""
+        creator = db.get(Creator, creator_id)
+        if creator is None:
+            raise NotFound(f"Creator {creator_id} does not exist.")
+
+        if _campaign_for_creator(db, creator.id) is None:
+            try:
+                _new_campaign(db, creator)
+            except IntegrityError:
+                db.rollback()
+
+        # The DB CHECK forbids the legacy lowercase value. Qualified + True is
+        # the only representation of outreach approval in Stage 2/3.
+        creator.status = "Qualified"
+        creator.qualified = True
+        db.commit()
+        db.refresh(creator)
+        approved_by = payload.approved_by if payload is not None else "creator"
+        return {
+            **creator.to_dict(),
+            "approved": True,
+            "approval_status": creator.status,
+            "approved_by": approved_by,
+        }
 
     @api.post("/scout")
     def scout(payload: ScoutRequest, db: Session = Depends(get_db)) -> dict[str, Any]:
@@ -424,6 +522,28 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "creator": creator.to_dict(),
             "qualification": qualification,
         }
+
+    @api.post("/scout/search")
+    def search_scout(
+        payload: ScoutSearchRequest, db: Session = Depends(get_db)
+    ) -> dict[str, Any]:
+        """Filter stored Creator rows only; never invent or rank synthetic data."""
+        from app.agents.agent1 import search_creators
+
+        rows = db.scalars(select(Creator).order_by(Creator.created_at.desc())).all()
+        matches = search_creators(
+            list(rows),
+            niche=payload.niche,
+            min_followers=payload.min_followers,
+            max_followers=payload.max_followers,
+            min_views=payload.min_views,
+            max_views=payload.max_views,
+        )
+        items = [
+            item.to_dict() if hasattr(item, "to_dict") else dict(item)
+            for item in matches
+        ]
+        return {"items": items, "count": len(items)}
 
     @api.get("/scout/{creator_id}")
     def get_creator(creator_id: int, db: Session = Depends(get_db)) -> dict[str, Any]:
@@ -566,6 +686,54 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "delivery": {
                 "status": "not_sent",
                 "reason": "A human must approve the draft; this starter has no email provider.",
+            },
+        }
+
+    @api.post("/outreach/send")
+    def send_outreach(
+        payload: OutreachSendRequest,
+        settings: Settings = Depends(get_settings),
+        db: Session = Depends(get_db),
+    ) -> dict[str, Any]:
+        """Stage 3 draft-only outreach write. Nothing is sent to any provider."""
+        # Reuse the existing outreach route's validation, campaign handling and
+        # rendering verbatim, then relabel the persisted draft. No provider is
+        # called by either route.
+        created = create_outreach(
+            OutreachCreate(
+                creator_id=payload.creator_id,
+                template_key=payload.template_key,
+                campaign_id=payload.campaign_id,
+                sender_name=payload.sender_name,
+                custom_note=payload.custom_note,
+            ),
+            settings,
+            db,
+        )
+        email = db.get(Email, int(created["id"]))
+        if email is None:
+            raise NotFound(f"Email {created['id']} does not exist.")
+        email.status = "draft_needs_approval"
+        email.approved = False
+        email.opened = False
+        email.replied = False
+        email.sent_at = None
+        db.commit()
+        db.refresh(email)
+        return {
+            **email.to_dict(),
+            "step": TEMPLATE_STEP.get(payload.template_key, 1),
+            "delivery": {
+                "status": "not_sent",
+                "reason": "This endpoint only creates a draft; no email provider is called.",
+            },
+            "approval": {
+                "required": True,
+                "endpoint": f"/api/outreach/{email.id}/approve",
+                "guidance": (
+                    "A human must approve this draft before it can be sent. "
+                    "Approval does not send anything in this starter."
+                ),
             },
         }
 
@@ -737,6 +905,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         db.refresh(product)
         return product.to_dict()
 
+    @api.post("/products/generate")
+    def generate_product(
+        payload: ProductCreate, db: Session = Depends(get_db)
+    ) -> dict[str, Any]:
+        """Alias of the locked product path with TOC generation forced on.
+
+        Branding stays locked to ``hybrid`` and the ordinal/split are derived
+        by the existing creation helper; no split math is repeated here.
+        """
+        data = payload.model_dump()
+        data["generate_toc"] = True
+        data["toc"] = None
+        data["branding"] = BRANDING
+        data["is_first_product"] = None
+        return create_product(ProductCreate(**data), db)
+
     @api.get("/products/{product_id}")
     def get_product(product_id: int, db: Session = Depends(get_db)) -> dict[str, Any]:
         product = db.get(Product, product_id)
@@ -772,9 +956,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         db: Session = Depends(get_db),
         client: WhopClient = Depends(get_whop),
     ) -> dict[str, Any]:
-        product = db.get(Product, payload.product_id)
+        # Both internal and external ids are normalised by the request schema;
+        # the helper also protects direct callers of this function.
+        product_id = _product_internal_id(payload.product_id)
+        product = db.get(Product, product_id)
         if product is None:
-            raise NotFound(f"Product {payload.product_id} does not exist.")
+            raise NotFound(f"Product {product_id} does not exist.")
         # agent4's validator raises PublishBlocked with the complete list of
         # unmet preconditions (creator approval, title, niche, price, TOC).
         # Reuse it so API callers get the same `details.reasons` contract.
@@ -792,18 +979,48 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 },
             )
 
+        # `payload.is_first_product` is deliberately not consulted: the stored
+        # ordinal and its basis points are the only source of split math.
+
         # agent4 keys its idempotency branch on `live` (and still accepts the
         # legacy value for pre-migration rows), so a repeat publish makes no
         # second Whop call and invents no URL.
         outcome = publish_product(db, product, client)
         whop = outcome.whop or {}
-        whop_url = whop.get("checkout_url") or whop.get("product_url")
-        if whop_url:
+        whop_url = product.whop_url or whop.get("checkout_url") or whop.get("product_url")
+        if whop_url and not product.whop_url:
             product.whop_url = str(whop_url)
         product.status = "live"
         db.commit()
         db.refresh(product)
-        return outcome.to_dict()
+
+        creator_split, operator_split = _split_mirrors(product.split_creator_bps)
+        if product.split_creator is not None:
+            creator_split = Decimal(str(product.split_creator))
+        if product.split_operator is not None:
+            operator_split = Decimal(str(product.split_operator))
+
+        from app.agents.agent4 import render_launch_captions, render_story_templates
+
+        assets = outcome.assets or {}
+        # Structured assets remain in `assets`; the flat keys are string
+        # renderings derived from those same stored structures.
+        story_templates = _string_list(render_story_templates(assets))
+        launch_captions = _string_list(render_launch_captions(assets))
+
+        return {
+            **outcome.to_dict(),
+            "product_id": _external_product_id(product.id),
+            "whop_product_id": whop.get("whop_product_id") or product.whop_product_id,
+            "whop_url": str(whop_url) if whop_url else None,
+            "is_first_product": bool(product.is_first_product),
+            "split_creator": float(creator_split),
+            "split_operator": float(operator_split),
+            "bio_link": assets.get("bio_link") or product.bio_link,
+            "story_templates": story_templates,
+            "launch_captions": launch_captions,
+            "status": "live",
+        }
 
     # ---- Whop status -----------------------------------------------------
     @api.get("/whop")
@@ -813,6 +1030,50 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "branding": BRANDING,
             "publish_endpoint": "/api/whop/publish",
         }
+
+    @api.get("/whop/products/{product_id}")
+    def whop_product(
+        product_id: str,
+        db: Session = Depends(get_db),
+        client: WhopClient = Depends(get_whop),
+    ) -> dict[str, Any]:
+        """Read a published product through the Whop adapter (no invented URL)."""
+        internal_id = _product_internal_id(product_id)
+        product = db.get(Product, internal_id)
+        if product is None:
+            raise NotFound(f"Product {internal_id} does not exist.")
+        if not product.whop_product_id:
+            raise Conflict(
+                "This product has not been published to Whop.",
+                code="not_published",
+                details={"product_id": internal_id, "status": product.status},
+            )
+        whop = client.get_product(product.whop_product_id)
+        return {
+            "product_id": _external_product_id(product.id),
+            "whop_product_id": product.whop_product_id,
+            "whop": whop,
+            "mode": client.mode,
+            "status": product.status,
+        }
+
+    @api.post("/whop/webhook")
+    def whop_webhook() -> JSONResponse:
+        """Explicitly deferred (Next): no sale row is created by this stub."""
+        return JSONResponse(
+            status_code=501,
+            content={
+                "detail": {
+                    "code": "webhook_next_cut",
+                    "message": (
+                        "Whop webhooks are deferred to a later cut: no signature "
+                        "verification, idempotency or sale/payout ledger exists yet. "
+                        "Record paid sales manually via POST /api/revenue/sales, which "
+                        "remains the current sale writer alongside calc_payouts."
+                    ),
+                }
+            },
+        )
 
     # ---- Revenue ---------------------------------------------------------
     @api.get("/revenue")
@@ -836,6 +1097,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "net_cents": int(row[3]),
                 "creator_cents": int(row[4]),
                 "instabix_cents": int(row[5]),
+                "payouts_due_cents": int(row[4]),
+                "payouts_due": float(_decimal_cents(int(row[4]))),
             },
             "splits": _split_payload(),
             "items": [sale.to_dict() for sale in sales],

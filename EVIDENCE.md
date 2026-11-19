@@ -17,6 +17,8 @@
 | `BRAND-AUDIT` | Prove the forbidden legacy brand and kit data are absent from shipped output | No matches in source or built output | Historical brief or excluded archive could be mistaken for shipped code | **PASS** — no matches in shipped scope | Corroborated by frontend-judge scan |
 | `DOCS-EVIDENCE` | Write the durable audit/plan/decisions/traceability/evidence/README package | All six root files created using only session-verified facts | Documentation could overstate milestone status | **PASS** — all six files written | **PASS** — independent docs judge; minor non-blocking notes closed below |
 | `DOCS-JUDGE` | Independently verify the six documents | All required content present, factual, mutually consistent, no forbidden brand | Overstated milestones or stale claims | **PASS** | **PASS** — verified repository/config/routes, milestone qualifiers, docs-read paths, and no forbidden-brand matches |
+| `STAGE3-HELPERS` | Add pure Stage 3 helper logic | Real-row search, disclosure-preserving renderers, secret-free get_product, config defaults | Fabricated data or dropped compliance content | **PASS** — 10 targeted tests green | **ACCEPT** — re-ran tests, independent probes for all four helpers, brand/diff audit clean |
+| `STAGE3-API` | Implement the 13-endpoint surface and exact publish contract | All routes present, one publish route, flat keys with server-derived splits, fail-closed webhook | Client ordinal trusted, duplicate route, auto-send | **PASS** — 11 new tests, full suite 177 green | **ACCEPT** — re-ran full suite, route/OpenAPI probe, deliberate wrong-client-ordinal publish probe, webhook no-sale probe |
 
 ## 2. Exact commands and summaries
 
@@ -346,3 +348,72 @@ LIVE_HEALTH_STATUS=OK
 | `STEP_DELAY_DAYS` computes 0/3/7 but only day 0 is initialized; `current_step` never advances to 2/3 and `next_followup_at` is not recomputed | Add a sequence-advancement atom and test it |
 | Root app keeps its 33-table schema; no dual-write layer | Decide one authoritative schema before multi-backend production (D16) |
 | Postgres live-provider credentials still unavailable | Obtain Meta, Resend, Stripe, Whop sandbox, writer/AI and checker credentials before calling M2-M6 Done |
+
+## 8. Stage 3 API surface and publish contract (2026-11-19)
+
+### 8.1 Atom verdicts
+
+Both atoms were independently judged read-only against the real system; no judge modified any file.
+
+| Atom | Producer | Judge | Judge highlights |
+| --- | --- | --- | --- |
+| STAGE3-HELPERS | PASS | **ACCEPT** | `search_creators` is pure (no DB/API/network/ranking), case-insensitive on locked niches, inclusive bounds, stable order, bad rows skipped, invalid bounds raise; renderers emit 4 story + 3 caption strings with disclosure, links, hashtags and sticker text preserved and no dict remnants; `PublishOutcome.to_dict()` and structured assets unchanged; `get_product` live GET via audited `_request` with URL-quoted id and whitelisted secret-free projection (no price/URL fabrication), mock has no URL/price/plan_id, disabled raises `WhopNotConfigured`; config defaults `None` / `50`, cap validates `> 0` |
+| STAGE3-API | PASS | **ACCEPT** | Full suite re-run green; flattened route probe found all 13 spec endpoints and exactly one `POST /api/whop/publish` (OpenAPI count 1); deliberate wrong client ordinal still produced server-derived splits; all nine flat keys plus every nested key present; webhook 501 created no sale; no legacy-brand hits; no lowercase `"approved"` written to creator status; no provider call on `/outreach/send`; `payouts_due_cents` from integer-cent aggregate |
+
+### 8.2 Exact commands and outputs
+
+```text
+backend: .\.venv\Scripts\python.exe -m pytest --tb=line
+177 passed, 1 warning in 10.78s
+PYTEST_EXIT=0
+
+backend: .\.venv\Scripts\python.exe -m compileall -q app tests
+COMPILEALL_EXIT=0
+
+backend targeted: .\.venv\Scripts\python.exe -m pytest tests/test_stage3_helpers.py --tb=short -q
+10 passed, 1 warning in 0.05s
+
+root: npm run verify
+> typecheck (clean) / lint (clean) / test (5 files, 52 tests passed) / build (production build succeeded)
+
+frontend: npm run typecheck  (clean)
+frontend: npm run build      (compiled successfully)
+
+legacy-brand audit (derived from the excluded reference kit into a shell variable; literal never written)
+derived_pattern_length=12
+root+docs hits=0  backend hits=0  .next hits=0  frontend hits=0
+
+live smoke: uvicorn app.main:app --port 8000
+/health      => {"status":"ok","version":"0.1.0","env":"development","branding":"hybrid","database":"ok","whop":{"mode":"mock",...},"api_key_required":false}
+/api/health  => identical body
+/api/settings no-key => HTTP 200
+/api/revenue  no-key => HTTP 200
+```
+
+### 8.3 Publish contract probe (judge, wrong client ordinal supplied)
+
+```text
+P1 product_id=prod_1 ; is_first_product=True ; split 0.6/0.4 (client sent is_first_product=false)
+P1 whop_product_id=prod_mock_<digest> ; whop_url=https://whop.com/checkout/plan_mock_<digest>
+   == adapter values, not invented by the route
+P1 status=live ; published=True ; created=True ; bio_link == assets.bio_link
+P1 story_templates len=4 all str ; disclosure_in_story=True
+P1 launch_captions len=3 all str ; disclosure_in_captions=True
+P1 nested keys present=True ; missing=set()
+P2 external id "prod_2" with client is_first_product=true -> product_id=prod_2
+   is_first_product=False ; split 0.5/0.5
+int id and "prod_1"/"prod_2" both accepted; repeat publish idempotent
+WEBHOOK_STATUS 501 ; CODE webhook_next_cut ; sales before/after 0/0 ; NO_SALE_ROW_CREATED=True
+```
+
+After the judge ACCEPT, one non-blocking weakness was closed in `tests/test_stage3_api.py`: the flat-contract test now asserts that `"Paid partnership"` survives into both string arrays. The full suite was re-run and stayed green (`177 passed`, `PYTEST_EXIT=0`, `COMPILEALL_EXIT=0`).
+
+### 8.4 Stage 3 residuals
+
+| Residual | Owner action |
+| --- | --- |
+| `POST /api/whop/webhook` is a 501 `(Next)` stub | Add signature verification, event-idempotency table and sale/payout ledger in a later cut |
+| Live `WhopClient.get_product` exercised only with monkeypatched transport | Run one official read against a Whop sandbox key |
+| `is_first_product` in the publish response is server-derived, never the client's | Clients must read the response value; do not treat the request field as authoritative |
+| `email_domain` is `null` when `EMAIL_FROM_DOMAIN` is unset | Configure a verified domain before enabling any send path |
+| Mock `get_product` exposes no checkout/product URL by design | Use a live sandbox key to obtain real product URLs |

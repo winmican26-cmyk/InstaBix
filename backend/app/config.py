@@ -64,6 +64,11 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:3100,http://127.0.0.1:3100"
     public_app_url: str = "http://localhost:3100"
 
+    # Stage 3 settings. The outreach cap mirrors the locked 50/day workspace
+    # limit (D12); these are server-owned and never client-writable here.
+    email_from_domain: str | None = None
+    outreach_daily_cap: int = Field(default=50, gt=0)
+
     whop_api_key: str | None = None
     whop_account_id: str | None = None
     whop_api_base: str = "https://api.whop.com/api/v1"

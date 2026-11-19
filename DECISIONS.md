@@ -130,6 +130,21 @@
 - `settings` replaces `app_settings` in the backend and gains `id`, unique `key`, and JSON value (JSONB on Postgres, JSON on SQLite).
 - New columns are added idempotently by an explicit backend migration runner; fresh databases receive full CHECK constraints from SQLAlchemy metadata.
 
+## D17 — Stage 3 API contract interpretation (2026-11-19)
+
+- `GET /health` is an API-key-exempt alias of `GET /api/health`; the canonical response is unchanged.
+- `POST /api/scout/search` filters stored creators by niche and follower/view ranges using real DB rows only; it does not invent or rank synthetic data. It reuses the Stage 1 score model only to expose existing qualification fields.
+- `GET /api/creators` is an alias of the Stage 2 creator list and adds a `niche` filter alongside `status`.
+- `POST /api/creators/{id}/approve` maps "approved for outreach" to the existing Stage 2 status `Qualified` plus `qualified=True`. No new creator status value is added and the DB CHECK is not loosened. The legacy lowercase `approved` value remains only in a read-only guard set and is never written.
+- `POST /api/outreach/send` creates a draft with status `draft_needs_approval` and step 1/2/3. It never sends. Human approval via `/api/outreach/{id}/approve` remains mandatory; no provider call is made from this endpoint.
+- `POST /api/products/generate` is an alias of the locked product-creation path with TOC generation forced on. Branding stays `hybrid` and splits stay server-derived (6000/4000 for the first product, 5000/5000 after).
+- `POST /api/whop/publish` accepts both integer product ids and external ids like `prod_1`. The request's `is_first_product` is accepted for contract compatibility but is never used for split math; the stored ordinal is authoritative and the response echoes the server-derived value.
+- The publish response adds the Stage 3 flat keys (`product_id`, `whop_product_id`, `whop_url`, `split_creator`, `split_operator`, `bio_link`, `story_templates`, `launch_captions`, `status`) while retaining the existing nested audit keys so current clients and tests keep working. `story_templates` and `launch_captions` are string renderings of the stored structured assets; the structured versions remain in `assets` for disclosure/link auditing.
+- Mock id and URL prefixes shown in the spec are illustrative. The real adapter's stored values are returned unchanged; no URL or id is fabricated.
+- `GET /api/whop/products/{id}` resolves the external id to the local product, reads its stored Whop identifiers, and uses the adapter only in live mode. Mock mode returns an explicit `mode=mock` projection from stored rows.
+- `POST /api/whop/webhook` is marked "(Next)" in the spec and is deferred. It will get signature verification, idempotency and a sale/payout ledger when implemented; the manual `/api/revenue/sales` path and `calc_payouts` remain the only current sale writers.
+- `GET /api/revenue` adds `payouts_due_cents` (integer cents, authoritative) and a decimal `payouts_due` mirror from the same aggregate; no payout ledger is invented. `GET /api/settings` adds `email_domain` and `daily_cap` from backend config, matching the locked 50/day workspace cap.
+
 ## Deliberately not done in this session
 
 - No legacy kit code was imported, adapted into production, or shipped.

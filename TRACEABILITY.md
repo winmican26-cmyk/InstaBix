@@ -84,3 +84,25 @@ The Stage 2 schema is authoritative in the FastAPI backend. `src/lib/db/schema.t
 Authoritative vs mirror columns: basis points (`split_creator_bps` = 6000/5000, `split_platform_bps` = 4000/5000) and integer cents (`price_cents`, `gross_cents`, `creator_cents`, `platform_cents`) drive all arithmetic. The Stage 2 decimal columns are persisted mirrors with CHECK constraints (`= 10000` bps, `= 1.00` decimals). The operator-only branding value is `instabix_only`; the global `/api/settings` branding value stays locked to `hybrid`.
 
 Migration evidence: `backend/app/migrate.py` is additive and idempotent; `backend/migrations/0001_stage2.sql` is the readable Postgres target DDL. Both fresh and legacy-upgrade paths were executed against a real Postgres instance on 2026-11-19 (see `EVIDENCE.md` section 7).
+
+## 7. Stage 3 API endpoint surface (2026-11-19)
+
+All routes below are in `backend/app/main.py`; the base URL is `http://localhost:8000`. D17 in `DECISIONS.md` records the interpretation rulings. `git` verified exactly one `POST /api/whop/publish` route.
+
+| Spec endpoint | Route (file:line) | Request / helper | Contract notes |
+| --- | --- | --- | --- |
+| `GET /health` | `main.py:387` on `app` | no body | API-key-exempt alias of `main.py:370` `/api/health`; identical body |
+| `POST /api/scout/search` | `main.py:526` | `schemas.py:164` `ScoutSearchRequest`; `agent1.search_creators` (`agent1.py:395`) | Filters stored `Creator` rows only; case-insensitive locked niche; inclusive follower/view bounds; no fabrication or ranking |
+| `GET /api/creators` | `main.py:406` | query `status`, `niche` | Alias of the Stage 2 creator list with the added niche filter |
+| `POST /api/creators/{id}/approve` | `main.py:421` | `schemas.py:124` `ApprovalRequest` | Writes `status="Qualified"` + `qualified=True`; lowercase `"approved"` only in a read-only guard set; idempotent, 404 when missing |
+| `POST /api/outreach/send` | `main.py:692` | `schemas.py:226` `OutreachSendRequest` | Creates `status="draft_needs_approval"`, step 1/2/3, `approved=False`, `sent_at=None`, `delivery.status="not_sent"`; no provider call |
+| `POST /api/outreach/classify` | `main.py:740` | `schemas.py:153` `ClassifyRequest` | Existing Stage 2 classifier; labels `POSITIVE`/`SOFT_POSITIVE`/`NEGATIVE` |
+| `POST /api/products/generate` | `main.py:908` | `schemas.py:87` `ProductCreate` | Delegates to `create_product` with `generate_toc=True`, `branding="hybrid"`, client ordinal cleared; splits server-derived |
+| `POST /api/products/{id}/approve` | `main.py:931` | `ApprovalRequest` | Existing Stage 2 gate; sets `creator_approved`, required before publish |
+| `POST /api/whop/publish` | `main.py:953` | `schemas.py:130` `PublishRequest` | Accepts int or `"prod_1"`; client `is_first_product` never used for splits; adds nine flat keys and keeps all nested audit keys |
+| `GET /api/whop/products/{id}` | `main.py:1034` | `whop.py` `WhopClient.get_product` | 404 missing, 409 `not_published`; mock mode returns `id/mode/mock/note` with no fabricated URL |
+| `POST /api/whop/webhook` | `main.py:1060` | no body | Explicit 501 `(Next)` stub, code `webhook_next_cut`; creates no sale row |
+| `GET /api/revenue` | `main.py:1079` | no body | Adds integer-cent `payouts_due_cents` plus decimal `payouts_due` mirror from `sum(Sale.creator_cents)` |
+| `GET /api/settings` | `main.py:1189` | `config.py:67-70` | Adds `email_domain` and `daily_cap` (50/day); branding stays locked to `hybrid` |
+
+Publish response flat keys and sources (`main.py:953-1023`): `product_id` from `_external_product_id`; `whop_product_id`/`whop_url` from the adapter result stored on the product; `split_creator`/`split_operator` decimal mirrors of `split_creator_bps` via `_split_mirrors`; `bio_link` from `assets`; `story_templates`/`launch_captions` as string renderings of structured assets via `agent4.render_story_templates` / `render_launch_captions` (`agent4.py:379`), preserving disclosure; `status="live"`. Structured assets remain in the nested `assets` key for link/disclosure auditing. Evidence: `EVIDENCE.md` section 8; `DECISIONS.md` D17.

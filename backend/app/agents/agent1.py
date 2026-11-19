@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import re
 import statistics
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -390,3 +390,113 @@ def rank_creators(creators: list[Mapping[str, Any]]) -> list[dict[str, Any]]:
 
     ranked.sort(key=lambda item: item["score"], reverse=True)
     return ranked
+
+
+_MISSING = object()
+
+
+def _row_value(row: Any, name: str) -> Any:
+    """Read one field from a mapping or an ORM row without raising."""
+    try:
+        if isinstance(row, Mapping):
+            return row.get(name)
+        return getattr(row, name, _MISSING)
+    except (AttributeError, KeyError, TypeError, ValueError):
+        return _MISSING
+
+
+def _row_int(value: Any) -> int | None:
+    if value is _MISSING or value is None or isinstance(value, bool):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
+def _readable_row(row: Any) -> bool:
+    """Only mappings and rows exposing at least one searchable field count."""
+    if isinstance(row, Mapping):
+        return True
+    return any(
+        _row_value(row, key) is not _MISSING
+        for key in ("niche", "followers", "median_views", "views")
+    )
+
+
+def _bound(name: str, value: int | None) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be an integer")
+    try:
+        return int(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(f"{name} must be an integer") from exc
+
+
+def _canonical_niche(value: str) -> str:
+    """Accept case variants of a locked niche without inventing a new one."""
+    text = value.strip()
+    for locked in NICHES:
+        if text.casefold() == locked.casefold():
+            return locked
+    return text
+
+
+def search_creators(
+    rows: Iterable[Any],
+    *,
+    niche: str | None = None,
+    min_followers: int | None = None,
+    max_followers: int | None = None,
+    min_views: int | None = None,
+    max_views: int | None = None,
+) -> list[Any]:
+    """Filter supplied creator rows by niche and inclusive metric ranges.
+
+    Pure and read-only: the original rows are returned in stable input order;
+    nothing is fabricated, ranked or fetched from an external API. ``None``
+    means no bound. Rows that cannot supply a value for a requested filter are
+    skipped rather than crashing the search.
+    """
+    wanted = _canonical_niche(niche) if niche is not None else None
+    follower_low = _bound("min_followers", min_followers)
+    follower_high = _bound("max_followers", max_followers)
+    view_low = _bound("min_views", min_views)
+    view_high = _bound("max_views", max_views)
+
+    matched: list[Any] = []
+    for row in rows:
+        if not _readable_row(row):
+            continue
+
+        if wanted is not None:
+            row_niche = _row_value(row, "niche")
+            if not isinstance(row_niche, str) or row_niche.strip().casefold() != wanted.casefold():
+                continue
+
+        if follower_low is not None or follower_high is not None:
+            followers = _row_int(_row_value(row, "followers"))
+            if followers is None:
+                continue
+            if follower_low is not None and followers < follower_low:
+                continue
+            if follower_high is not None and followers > follower_high:
+                continue
+
+        if view_low is not None or view_high is not None:
+            raw_views = _row_value(row, "median_views")
+            if raw_views is _MISSING:
+                raw_views = _row_value(row, "views")
+            views = _row_int(raw_views)
+            if views is None:
+                continue
+            if view_low is not None and views < view_low:
+                continue
+            if view_high is not None and views > view_high:
+                continue
+
+        matched.append(row)
+
+    return matched

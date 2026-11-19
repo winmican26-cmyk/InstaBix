@@ -28,6 +28,7 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Callable
+from urllib.parse import quote
 
 import httpx
 
@@ -223,6 +224,17 @@ def _safe_details(details: dict[str, Any]) -> dict[str, Any]:
         for key, value in details.items()
         if not any(token in str(key).lower() for token in _SECRET_TOKENS)
     }
+
+
+def _safe_scalar(value: Any, limit: int = 500) -> str | None:
+    """Return a bounded scalar for a whitelisted response field."""
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, str):
+        return value.strip()[:limit] or None
+    if isinstance(value, int):
+        return str(value)[:limit]
+    return None
 
 
 def _safe_asset_ref(kind: str, value: Any) -> str:
@@ -513,6 +525,72 @@ class WhopClient:
             if isinstance(message, str):
                 return message[:500]
         return "unknown error"
+
+    def get_product(self, whop_product_id: str) -> dict[str, Any]:
+        """Read a Whop product by its id using the official v1 API.
+
+        Live mode issues ``GET /products/{id}`` through the same audited
+        request helper as publishing and returns a secret-free, whitelisted
+        projection. Mock mode returns an explicit mock marker only: no
+        checkout URL, product URL, plan id or price is invented. Disabled mode
+        fails closed rather than falling back to mock data.
+        """
+        product_id = str(whop_product_id or "").strip()
+        if not product_id:
+            raise ValueError("A Whop product id is required.")
+
+        if self.mode == "mock":
+            return {
+                "id": product_id,
+                "mode": "mock",
+                "mock": True,
+                "note": (
+                    "Mock mode: no Whop API call was made; this is an explicit "
+                    "projection of the stored Whop id. No checkout URL, product "
+                    "URL or price was fabricated."
+                ),
+            }
+
+        self._require_publishing()
+
+        data = self._request(
+            "GET",
+            f"/products/{quote(product_id, safe='')}",
+            payload={},
+            idempotency_key=f"instabix-product-read-{product_id}",
+            product_id=product_id,
+            reference_id=product_id,
+        )
+
+        result: dict[str, Any] = {"id": product_id, "mode": "live", "mock": False}
+        returned_id = _safe_scalar(data.get("id"))
+        if returned_id:
+            result["id"] = returned_id
+        for key in (
+            "title",
+            "name",
+            "route",
+            "visibility",
+            "description",
+            "created_at",
+            "updated_at",
+        ):
+            value = _safe_scalar(data.get(key))
+            if value is not None:
+                result[key] = value
+
+        # Only real http(s) values present in the response are mapped; no URL
+        # is constructed here and no price is inferred from a live payload.
+        for target, sources in (
+            ("product_url", ("url", "product_url")),
+            ("checkout_url", ("checkout_url", "purchase_url")),
+        ):
+            for source in sources:
+                value = data.get(source)
+                if isinstance(value, str) and value.strip().startswith(("https://", "http://")):
+                    result[target] = value.strip()[:500]
+                    break
+        return result
 
     @staticmethod
     def _map_assets(

@@ -206,16 +206,26 @@ The FastAPI backend now implements the six-table Stage 2 schema: `creators`, `ca
 
 Gates on 2026-11-19: backend `156 passed` with clean `compileall`; root `npm run verify` passed (`52 tests` + production build); frontend typecheck and production build clean; fresh and legacy Postgres migration smokes passed; live health check returned `database=ok`. See `EVIDENCE.md` section 7 and `DECISIONS.md` D16.
 
+## 7d. Stage 3 API surface and Whop publish contract
+
+All 13 endpoints from the Stage 3 cut are implemented on the FastAPI backend at `http://localhost:8000`: the API-key-exempt `GET /health` alias, creator search/list/approval, outreach send/classify, product generate/approve, Whop publish/get, the `(Next)` webhook stub, revenue and settings. Exact route-to-code mapping is in `TRACEABILITY.md` section 7.
+
+The `POST /api/whop/publish` request accepts `{"product_id": "prod_1", "is_first_product": true}` (integer ids also work). The client's `is_first_product` is accepted for contract compatibility but is **never** used for split math: the stored ordinal wins, so the response reports the server-derived split and `is_first_product`. The flat response keys are `product_id`, `whop_product_id`, `whop_url`, `split_creator`, `split_operator`, `bio_link`, `story_templates` (strings), `launch_captions` (strings) and `status="live"`; every pre-existing nested audit key is retained. Disclosure text is preserved in the rendered arrays. `GET /api/whop/products/{id}` returns real adapter data in live mode and an explicit `mode=mock` projection with no fabricated URL in mock mode. `POST /api/whop/webhook` is an intentional 501 `webhook_next_cut` stub; `/api/revenue/sales` remains the only current sale writer.
+
+Gates on 2026-11-19: backend `177 passed` with clean `compileall`; root `npm run verify` passed (`52 tests` + production build); frontend typecheck and production build clean; brand audit zero hits; live `/health` and `/api/health` both returned `status=ok`, `database=ok`. Two independent judge verdicts: STAGE3-HELPERS **ACCEPT**, STAGE3-API **ACCEPT**. See `EVIDENCE.md` section 8 and `DECISIONS.md` D17.
+
 ## 8. Known blockers
 
 - No clean-clone CI run has been demonstrated.
 - No real Meta/Instagram account test: credentials and registered test accounts required.
 - No real Resend send/reply/unsubscribe test: credentials, verified domain, and real inbox required.
 - No real Stripe test-mode purchase/refund/statement reconciliation: credentials required.
-- No Whop sandbox publish: sandbox key required.
+- No Whop sandbox publish: sandbox key required; live `get_product` was exercised only with a monkeypatched transport.
+- `POST /api/whop/webhook` is a 501 `(Next)` stub: signature verification, idempotency and a sale/payout ledger remain a later cut.
+- `email_domain` is `null` until `EMAIL_FROM_DOMAIN` is configured; no outreach send path is enabled in this build.
 - No Playwright E2E, Lighthouse budgets, load test, backup/restore drill, security review, or App Review recording.
 - Root surfaces compile and pass unit tests but were not runtime-reverified against populated real rows in the documented session.
-- Stage 1 was pushed as `43d75e9`; Stage 2 was pushed as `03a8512`. Local `main` and `origin/main` match and the working tree is clean.
+- Stage 1 was pushed as `43d75e9`; Stage 2 was pushed as `03a8512`; Stage 3 was committed and pushed on 2026-11-19 (see git log and `EVIDENCE.md` section 8 for the exact hash and gates).
 
 ## 9. Documentation index
 

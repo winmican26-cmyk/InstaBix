@@ -128,9 +128,82 @@ class ApprovalRequest(BaseModel):
 
 
 class PublishRequest(BaseModel):
+    """Stage 3 publish contract.
+
+    ``product_id`` accepts the internal integer id or an external id such as
+    ``prod_1``. Both are normalised to the internal integer id; a client-
+    supplied ``is_first_product`` is accepted for compatibility but is never
+    used for split math (the stored ordinal is authoritative).
+    """
+
     model_config = ConfigDict(extra="forbid")
 
-    product_id: int = Field(gt=0)
+    product_id: int | str
+    is_first_product: bool | None = None
+
+    @field_validator("product_id", mode="before")
+    @classmethod
+    def _product_id(cls, value: Any) -> int:
+        if isinstance(value, bool):
+            raise ValueError("product_id must be a positive integer or 'prod_<id>'")
+        if isinstance(value, int):
+            parsed = value
+        else:
+            text = str(value).strip()
+            if text.startswith("prod_"):
+                text = text[len("prod_") :]
+            try:
+                parsed = int(text)
+            except ValueError as exc:
+                raise ValueError("product_id must be an integer or 'prod_<id>'") from exc
+        if parsed <= 0:
+            raise ValueError("product_id must be positive")
+        return parsed
+
+
+class ScoutSearchRequest(BaseModel):
+    """Filters for Stage 3 stored-creator search. No synthetic data."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    niche: str | None = Field(default=None, max_length=64)
+    min_followers: int | None = Field(default=None, ge=0)
+    max_followers: int | None = Field(default=None, ge=0)
+    min_views: int | None = Field(default=None, ge=0)
+    max_views: int | None = Field(default=None, ge=0)
+
+    @field_validator("niche")
+    @classmethod
+    def _niche(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = " ".join(value.split())
+        if not cleaned:
+            raise ValueError("Niche cannot be blank")
+        # Search-only canonicalisation: a case-insensitive match is folded to
+        # the locked value. The global NICHES lock and ScoutRequest's strict
+        # validator are untouched; unknown values pass through to the pure
+        # search helper, which simply returns no matches for them.
+        for locked in NICHES:
+            if cleaned.casefold() == locked.casefold():
+                return locked
+        return cleaned
+
+    @model_validator(mode="after")
+    def _ranges(self) -> "ScoutSearchRequest":
+        if (
+            self.min_followers is not None
+            and self.max_followers is not None
+            and self.min_followers > self.max_followers
+        ):
+            raise ValueError("min_followers cannot exceed max_followers")
+        if (
+            self.min_views is not None
+            and self.max_views is not None
+            and self.min_views > self.max_views
+        ):
+            raise ValueError("min_views cannot exceed max_views")
+        return self
 
 
 class OutreachCreate(BaseModel):
@@ -148,6 +221,43 @@ class OutreachCreate(BaseModel):
         if value not in TEMPLATE_KEYS:
             raise ValueError(f"Template must be one of: {', '.join(TEMPLATE_KEYS)}")
         return value
+
+
+class OutreachSendRequest(BaseModel):
+    """Stage 3 draft-only outreach request.
+
+    ``template_key`` accepts the three template names or their ordinals
+    1/2/3 (as an int or numeric string). Every value is mapped to the existing
+    Stage 2 template key so the same validation and rendering path is reused.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    creator_id: int = Field(gt=0)
+    template_key: int | str = "initial"
+    campaign_id: int | None = Field(default=None, gt=0)
+    sender_name: str = Field(default="The InstaBix team", min_length=1, max_length=120)
+    custom_note: str | None = Field(default=None, max_length=500)
+
+    @field_validator("template_key", mode="before")
+    @classmethod
+    def _template(cls, value: Any) -> str:
+        if isinstance(value, bool):
+            raise ValueError("template_key must be a template name or 1/2/3")
+        if isinstance(value, int):
+            mapped = {1: "initial", 2: "follow_up", 3: "close_loop"}.get(value)
+            if mapped is None:
+                raise ValueError("template_key must be 1, 2 or 3")
+            return mapped
+        text = str(value).strip()
+        if text.isdigit():
+            mapped = {1: "initial", 2: "follow_up", 3: "close_loop"}.get(int(text))
+            if mapped is None:
+                raise ValueError("template_key must be 1, 2 or 3")
+            return mapped
+        if text not in TEMPLATE_KEYS:
+            raise ValueError(f"Template must be one of: {', '.join(TEMPLATE_KEYS)}")
+        return text
 
 
 class ClassifyRequest(BaseModel):
