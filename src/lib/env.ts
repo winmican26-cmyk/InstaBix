@@ -1,6 +1,11 @@
 import { z } from "zod";
 
-const optionalString = z.string().trim().min(1).optional();
+// Empty credential nodes are placeholders waiting for real values. Treat them
+// as unset so a prepared .env can boot without accidentally enabling a provider.
+const optionalString = z.preprocess(
+  (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+  z.string().trim().min(1).optional(),
+);
 
 const schema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),

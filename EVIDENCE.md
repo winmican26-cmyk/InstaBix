@@ -417,3 +417,18 @@ After the judge ACCEPT, one non-blocking weakness was closed in `tests/test_stag
 | `is_first_product` in the publish response is server-derived, never the client's | Clients must read the response value; do not treat the request field as authoritative |
 | `email_domain` is `null` when `EMAIL_FROM_DOMAIN` is unset | Configure a verified domain before enabling any send path |
 | Mock `get_product` exposes no checkout/product URL by design | Use a live sandbox key to obtain real product URLs |
+
+## 9. Credential node readiness (2026-11-19)
+
+Empty credential nodes were prepared ahead of real values. No credential value was supplied or invented; every node is empty.
+
+| File | Nodes added | Tracking |
+| --- | --- | --- |
+| `.env.example` | `META_DISCOVERY_TOKEN`, `META_DISCOVERY_IG_USER_ID`, `META_SCOPES`; reserved `GOOGLE_DOCS_CLIENT_ID/SECRET/REFRESH_TOKEN`, `PDF_SERVICE_API_KEY`, `PLAGIARISM_API_KEY`, `AI_DETECTION_API_KEY`; cross-reference to `backend/.env` for Whop | tracked template |
+| `.env.local` | Same Meta, Resend, Stripe, AI and reserved nodes, all empty; existing local values preserved unchanged | gitignored |
+| `backend/.env` (new) | `API_KEY`, `EMAIL_FROM_DOMAIN`, `WHOP_API_KEY`, `WHOP_ACCOUNT_ID` and the non-secret Whop settings | gitignored |
+| `frontend/.env.local` (new) | `API_KEY` | gitignored |
+
+`src/lib/env.ts` Zod probe before the fix: `empty: false`, `absent: true`, `value: true` — an empty node would have broken boot. The optional-string preprocessor now maps empty/whitespace-only values to `undefined`. `tests/env.test.ts` (3 tests) proves empty and whitespace values are unset while a real value is configured.
+
+Gates re-run after the change: root `npm run verify` passed (`55 tests` in 6 files, production build with `.env.local` loaded); frontend typecheck and production build clean; backend `177 passed`, `COMPILEALL_EXIT=0`. No provider is enabled by a placeholder.

@@ -132,11 +132,16 @@ The dashboard is a server-rendered page. It reads health, creators, outreach, pr
 | `AUTH_SECRET` | Session signing secret |
 | `TOKEN_ENCRYPTION_KEY` | Encryption key for provider tokens at rest |
 | `META_APP_ID`, `META_APP_SECRET`, `META_REDIRECT_URI`, `META_WEBHOOK_VERIFY_TOKEN`, `GRAPH_VERSION` | Instagram/Meta integration |
+| `META_DISCOVERY_TOKEN`, `META_DISCOVERY_IG_USER_ID` | Business Discovery enrichment; disabled, never simulated, until both are set |
+| `META_SCOPES` | Optional override of the OAuth scopes requested from Meta |
 | `RESEND_API_KEY`, `OUTREACH_FROM`, `OUTREACH_REPLY_TO`, `OUTREACH_INBOX` | Email integration |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Stripe test-mode integration |
 | `ANTHROPIC_API_KEY`, `AI_MODEL` | Product studio AI |
+| `GOOGLE_DOCS_CLIENT_ID`, `GOOGLE_DOCS_CLIENT_SECRET`, `GOOGLE_DOCS_REFRESH_TOKEN`, `PDF_SERVICE_API_KEY`, `PLAGIARISM_API_KEY`, `AI_DETECTION_API_KEY` | Reserved credential nodes; no adapter reads them yet, so a value alone enables nothing |
 | `SENTRY_DSN`, `POSTHOG_KEY` | Optional observability |
 | `SEED_EMAIL`, `SEED_PASSWORD` | Local seed only |
+
+Credential nodes are prepared empty in `.env.example`, `.env.local` and `backend/.env` and will be filled when real values are supplied. `src/lib/env.ts` treats empty or whitespace-only optional values as unset, so a prepared file boots safely and cannot accidentally enable a provider. These local env files are gitignored; never commit real values.
 
 ### Backend (`backend/.env`)
 
@@ -146,6 +151,8 @@ The dashboard is a server-rendered page. It reads health, creators, outreach, pr
 | `APP_VERSION` | `0.1.0` | Reported by health endpoint |
 | `DATABASE_URL` | `sqlite:///./instabix.db` | SQLite locally; Postgres URL in production |
 | `API_KEY` | unset | Optional server-side key; every `/api` route except health then requires `X-API-Key` |
+| `EMAIL_FROM_DOMAIN` | unset | Verified sender domain exposed by `GET /api/settings` |
+| `OUTREACH_DAILY_CAP` | `50` | Workspace-scoped daily outreach cap exposed by `GET /api/settings` |
 | `CORS_ORIGINS` | `http://localhost:3100,http://127.0.0.1:3100` | Allowed browser origins |
 | `PUBLIC_APP_URL` | `http://localhost:3100` | Used for unsubscribe links |
 | `WHOP_API_KEY` | unset | Live adapter key; required in production |
