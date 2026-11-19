@@ -153,6 +153,19 @@
 - The reference splits routes across six router modules. The accepted production architecture keeps one registration point in `backend/app/main.py` (with `routers/whop.py` for the audit endpoint), which the Stage 2/3 judges verified. A literal router split is a no-op refactor and is deferred to a dedicated atom if requested; it is not required for endpoint correctness.
 - The one genuinely missing artifact was an API client collection. It is added as `postman/Instabix.postman_collection.json`, `postman/Instabix.postman_environment.json` and `postman/README.md`, using InstaBix naming only, covering all 13 endpoints and carrying no credentials.
 
+## D19 — Section 7 Whop reference reconciliation (2026-11-19)
+
+- The pasted Section 7 code is the excluded legacy reference, not a patch. An independent read-only audit compared every item with the shipped adapter; no production code change was warranted. Each reference capability is already present, aliased to a stronger shipped implementation, or deliberately rejected by a prior locked decision.
+- API base: the reference `https://api.whop.com/v5` conflicts with the locked Current API base `https://api.whop.com/api/v1` (`config.py:74`) and `Api-Version-Date` pin (`config.py:75`, `whop.py:323`). Official Whop docs confirm `/api/v1` is the Current API (sandbox `https://sandbox-api.whop.com/api/v1`) and `/api-reference/legacy/` is the Legacy API. The v5 path was not adopted.
+- Credentials: module-level `API_KEY`/`COMPANY_ID` globals are rejected; shipped credentials are injected `Settings` values (`config.py:72-73`, `deps.py:24-25`), with reference `WHOP_COMPANY_ID` mapped to `WHOP_ACCOUNT_ID`.
+- Split authority: the reference `split_for(client_bool)` survives only as a decimal mirror (`whop.py:66`). Authoritative basis points come from the stored product ordinal (`split_bps_for`, `whop.py:75`; `main.py:842-860,982-983`), and a disagreeing client ordinal is rejected. Client `is_first_product` stays non-authoritative.
+- Money: the reference `price: float`, `int(price*100)` and float-rounded payouts are rejected. Shipped `calc_payouts(gross_cents, is_first_product, refunded_cents=0)` (`whop.py:80-115`) uses integer cents with Decimal half-up and remainder-to-platform; decimals are mirrors only.
+- Live calls: the reference single `POST /products` with `company_id` and client `metadata.branding` is superseded by the official two-call product+variant flow (`whop.py:719-751`) using `account_id`, idempotency keys, one retry and audited failure notifications.
+- Demo data / URLs: the `_demo_products` dict, dynamic product object and fabricated `https://whop.com/mock/...` URL are rejected. Publish resolves a real DB `Product` and blocks with 409 `publish_blocked` before any call; mock mode returns explicitly flagged simulated values and is never selected in production (disabled → 503).
+- Branding: the reference description's operator-brand text and split percentages are rejected. Shipped description is TOC-derived only (`agent4.py:550-555`); branding is structured metadata `{"branding": "hybrid"}` and the operator-only branding value stays `instabix_only`. The forbidden brand token appears nowhere in the shipped tree.
+- Story/caption counts: the reference 3 stories + 2 captions matches no shipped array and is a style difference, not a functional gap. Shipped stores and renders 4 story + 3 caption strings (`agent4.py:226-258,300-344`) plus 3 compact story specs and 3 caption variations. D17 already locked the flat keys as string renderings of structured assets with disclosure preserved; that contract is unchanged.
+- Residual `(Next)` items (webhook 501, in-memory audit/notifications, sandbox verification) are deferred cuts, not reference features; none is needed to satisfy this comparison.
+
 ## Deliberately not done in this session
 
 - No legacy kit code was imported, adapted into production, or shipped.

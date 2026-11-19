@@ -106,3 +106,17 @@ All routes below are in `backend/app/main.py`; the base URL is `http://localhost
 | `GET /api/settings` | `main.py:1189` | `config.py:67-70` | Adds `email_domain` and `daily_cap` (50/day); branding stays locked to `hybrid` |
 
 Publish response flat keys and sources (`main.py:953-1023`): `product_id` from `_external_product_id`; `whop_product_id`/`whop_url` from the adapter result stored on the product; `split_creator`/`split_operator` decimal mirrors of `split_creator_bps` via `_split_mirrors`; `bio_link` from `assets`; `story_templates`/`launch_captions` as string renderings of structured assets via `agent4.render_story_templates` / `render_launch_captions` (`agent4.py:379`), preserving disclosure; `status="live"`. Structured assets remain in the nested `assets` key for link/disclosure auditing. Evidence: `EVIDENCE.md` section 8; `DECISIONS.md` D17.
+
+## 8. Section 7 Whop reference reconciliation (2026-11-19)
+
+The pasted Section 7 code is legacy reference, not a production patch. D19 in `DECISIONS.md` records the verdict and `EVIDENCE.md` section 11 the evidence. No code changed.
+
+| Reference symbol | Shipped counterpart |
+| --- | --- |
+| `WHOP_BASE = ".../v5"` | `config.py:74` `whop_api_base` = `https://api.whop.com/api/v1`; `Api-Version-Date` at `whop.py:323` |
+| `API_KEY`, `COMPANY_ID` globals | `Settings.whop_api_key` / `whop_account_id` injected at `whop.py:273-284` via `deps.py:24-25` |
+| `split_for(client_bool)` as authority | Decimal mirror `whop.py:66`; authority `split_bps_for` `whop.py:75` + stored ordinal `main.py:842-860,982-983` |
+| `create_whop_product` float/mock | `WhopClient.publish_product` `whop.py:653-774`; official two-call flow `whop.py:719-751`; disabled → 503 `whop.py:304-311` |
+| `calc_payouts(amount: float, ...)` | `calc_payouts(gross_cents: int, ...)` `whop.py:80-115` |
+| `_demo_products` + fabricated GET URL | Real DB `Product` + 409 gate `main.py:953-980`; mock projection without URL `whop.py:542-552` |
+| 3 stories + 2 captions | 4 story + 3 caption strings; 3 specs + 3 variations (`agent4.py:226-363`) |

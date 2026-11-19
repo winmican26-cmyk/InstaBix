@@ -221,6 +221,12 @@ The `POST /api/whop/publish` request accepts `{"product_id": "prod_1", "is_first
 
 Gates on 2026-11-19: backend `177 passed` with clean `compileall`; root `npm run verify` passed (`52 tests` + production build); frontend typecheck and production build clean; brand audit zero hits; live `/health` and `/api/health` both returned `status=ok`, `database=ok`. Two independent judge verdicts: STAGE3-HELPERS **ACCEPT**, STAGE3-API **ACCEPT**. See `EVIDENCE.md` section 8 and `DECISIONS.md` D17.
 
+## 7e. Section 7 Whop reference reconciliation
+
+The pasted Section 7 snippets are legacy reference, not a patch. An independent read-only audit found no genuine functional gap: every item is already present, aliased to a stronger shipped implementation, or deliberately rejected by a locked decision. No production code changed.
+
+Official Whop docs confirm the Current API base is `https://api.whop.com/api/v1` (sandbox `https://sandbox-api.whop.com/api/v1`) with `Authorization: Bearer` and a dated `Api-Version-Date` pin. The pasted `/v5` path, client-trusted splits, float money, demo products, operator-brand text and fabricated mock URLs were not adopted. The reference 3 stories + 2 captions is a style difference; shipped keeps 4 story + 3 caption strings plus 3 compact specs and 3 caption variations, with disclosure preserved (D17). See `DECISIONS.md` D19, `EVIDENCE.md` section 11 and `TRACEABILITY.md` section 8.
+
 ## 8. Known blockers
 
 - No clean-clone CI run has been demonstrated.

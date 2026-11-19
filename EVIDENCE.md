@@ -458,3 +458,28 @@ legacy-brand hits in postman/ = 0
 ```
 
 The collection encodes the locked rules in request descriptions: drafts are never auto-sent, `is_first_product` is accepted but never trusted for splits, the webhook is a 501 stub, and no secrets belong in Postman.
+
+## 11. Section 7 Whop reference audit (2026-11-19)
+
+D19 in `DECISIONS.md` records the verdict. An independent read-only audit compared the pasted Section 7 code with the shipped backend; the audit changed no files and no production code change was warranted. Official Whop docs (`https://docs.whop.com/llms.txt`, `https://docs.whop.com/api-reference`) were fetched in parallel and confirm:
+
+- Current API base `https://api.whop.com/api/v1`; sandbox `https://sandbox-api.whop.com/api/v1`.
+- `Authorization: Bearer <API_KEY>` from the server only; pin a dated version with `Api-Version-Date`.
+- Current API docs under `/api-reference/`; Legacy API under `/api-reference/legacy/`.
+
+The pasted `https://api.whop.com/v5` is therefore a legacy path. Shipped `config.py:74-75` and `whop.py:323,398` already match the Current API; no edit was made.
+
+| Pasted item | Verdict | Shipped evidence |
+| --- | --- | --- |
+| `WHOP_BASE = ".../v5"` | Rejected (locked conflict) | `config.py:74-75`, `whop.py:323,398`; v1 asserted in `test_agent4.py`, `test_stage3_helpers.py` |
+| Module `API_KEY` / `COMPANY_ID` globals | Rejected | Injected `Settings` (`config.py:72-73`, `deps.py:24-25`); `WHOP_ACCOUNT_ID` alias |
+| Client-bool `split_for` | Mirror only | Authoritative `split_bps_for` `whop.py:75`; stored ordinal `main.py:842-860,982-983`; 409 mismatch |
+| `create_whop_product`, float price, mock id/URL | Rejected / aliased | `WhopClient.publish_product` `whop.py:653-774`; two-call product+variant `whop.py:719-751`; no `whop_mock_` id or `/mock/` URL in source |
+| `calc_payouts(amount: float, ...)` | Superseded | `calc_payouts(gross_cents: int, ...)` `whop.py:80-115`, integer cents + Decimal half-up; `test_whop.py:8-55` |
+| Forbidden brand text in description | Rejected | TOC-derived description `agent4.py:550-555`; structured metadata `agent4.py:561-566`; derived-pattern repo search 0 hits |
+| `_demo_products`, dynamic class `P`, 400 gate | Rejected | Real `Product` row, 404 missing, 409 `publish_blocked` `main.py:953-980`; single route asserted `test_stage3_api.py:93-103` |
+| Fabricated GET URL | Rejected | Mock projection without URL `whop.py:542-552`; live whitelist `whop.py:565-593` |
+| 3 stories + 2 captions | Style difference, not a gap | 4 story + 3 caption strings (`agent4.py:226-258,300-344`; renderers `agent4.py:472-503`) plus 3 specs + 3 variations; accepted in §8.3 and D17 |
+| `qualifies()`-based scout search | Aliased | Pure stored-row `search_creators` `agent1.py:447-502`; route `main.py:526-546` |
+
+**Verdict:** no genuine functional gap and no atom required. Known residuals (`POST /api/whop/webhook` 501 stub, in-memory audit/notifications, sandbox verification) are deferred cuts already recorded in §8.4, not missing reference features. The forbidden brand token was never written; docs refer to it only as "the forbidden legacy brand".
