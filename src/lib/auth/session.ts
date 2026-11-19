@@ -7,12 +7,16 @@ import { db } from "@/lib/db";
 import { memberships, orgs, sessions, users } from "@/lib/db/schema";
 import { randomToken, sha256 } from "@/lib/crypto";
 import type { Org, User } from "@/lib/db/schema";
+import { canAccessOperator, CREATOR_ROLE, type Role } from "@/lib/auth/roles";
+
+export type { Role } from "@/lib/auth/roles";
+export { canManage, canReview } from "@/lib/auth/roles";
 
 const COOKIE = "ibx_session";
 const SESSION_DAYS = 30;
 
-export type Role = "owner" | "admin" | "operator" | "reviewer" | "creator";
 export type Workspace = { user: User; org: Org; role: Role; sessionTokenHash: string };
+export type CreatorWorkspace = { user: User; org: Org };
 
 export async function createSession(userId: string, orgId: string | null): Promise<void> {
   const token = randomToken(32);
@@ -85,7 +89,11 @@ export async function getWorkspace(): Promise<Workspace | null> {
   const rows = await getMemberships(session.user.id);
   if (rows.length === 0) return null;
 
-  const active = rows.find((r) => r.org.id === session.orgId) ?? rows[0];
+  // Only operator-eligible memberships may resolve a workspace. A creator-only
+  // account resolves to null here, so pages, actions and the export routes that
+  // check for null all fail closed against the operator surface.
+  const eligible = rows.filter((row) => canAccessOperator(row.role));
+  const active = eligible.find((row) => row.org.id === session.orgId) ?? eligible[0];
   if (!active) return null;
 
   return {
@@ -106,14 +114,25 @@ export async function requireWorkspace(): Promise<Workspace> {
   const session = await getSessionUser();
   if (!session) redirect("/login");
   const workspace = await getWorkspace();
-  if (!workspace) redirect("/onboarding");
+  if (!workspace) {
+    const memberships = await getMemberships(session.user.id);
+    if (memberships.some((row) => row.role === CREATOR_ROLE)) redirect("/creator");
+    redirect("/onboarding");
+  }
   return workspace;
 }
 
-export function canManage(role: Role): boolean {
-  return role === "owner" || role === "admin";
-}
-
-export function canReview(role: Role): boolean {
-  return role === "owner" || role === "admin" || role === "operator" || role === "reviewer";
+/**
+ * Creator-only session. Resolves the creator membership bound to this session,
+ * never an operator workspace, and is the only guard used by the creator portal.
+ */
+export async function requireCreator(): Promise<CreatorWorkspace> {
+  const session = await getSessionUser();
+  if (!session) redirect("/login");
+  const memberships = await getMemberships(session.user.id);
+  const active =
+    memberships.find((row) => row.role === CREATOR_ROLE && row.org.id === session.orgId) ??
+    memberships.find((row) => row.role === CREATOR_ROLE);
+  if (!active) redirect("/dashboard");
+  return { user: session.user, org: active.org };
 }

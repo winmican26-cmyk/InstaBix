@@ -133,3 +133,21 @@ The pasted frontend starter and SQL migration are legacy reference. D20 in `DECI
 | Six tables including settings | `0001_stage2.sql:8,52,70,116,141,173` — same table set with indexes and CHECKs |
 | UUID PKs, NUMERIC authority, `calc_split()` | INTEGER PKs, integer cents/bps authoritative + decimal mirrors, ordinal derived `main.py:842-860` |
 | Demo creator/product seed | None shipped; real rows only |
+
+## 10. Creator self-registration surface (2026-11-19)
+
+D21 in `DECISIONS.md` records the design decisions; `EVIDENCE.md` section 13 holds the gates and judge verdict. The root app owns this flow; backend and frontend starter are unchanged.
+
+| Capability | Implementation | Contract / guard |
+| --- | --- | --- |
+| Public registration page | `src/app/creator/signup/page.tsx`, `signup-form.tsx` | Real consent + terms checkboxes; no demo fields or sample values |
+| Registration action | `src/app/creator/signup/actions.ts` | One transaction: `users` → `memberships(role:"creator")` → `creator_accounts` → `consents` → `audit_events`; then scoped session and redirect to `/creator` |
+| Pure validation contract | `src/lib/creator-signup.ts` | Zod fields, shared scrypt password policy, handle normalization, 5/hour rate key, applied-state constants, consent version |
+| Role policy | `src/lib/auth/roles.ts` | `canAccessOperator()` denies only `creator`; `canManage`/`canReview` unchanged |
+| Operator deny | `src/lib/auth/session.ts` `getWorkspace()` / `requireWorkspace()` | Creator resolves no workspace; creator sessions redirect to `/creator`; covers `(app)/**`, all actions and `/api/export/**` |
+| Secondary entry points | `src/app/onboarding/page.tsx`, `src/lib/actions/org.ts` | `hasOperatorMembership()` guard on `/onboarding` and `createOrgAction`; `setActiveOrg()` rejects creator memberships; unknown roles denied by allowlist |
+| Creator portal | `src/app/creator/page.tsx` | `requireCreator()`; reads only the row matching `orgId` (RLS via `withOrg`) **and** `userId` |
+| Verification state | `users.emailVerifiedAt`, `drizzle/0005_creator_signup.sql` | `NULL` at signup; delivery deferred; no fabricated verified timestamp |
+| Login-to-application link | `creatorAccounts.userId` + `creators_user_idx` | Nullable FK with `ON DELETE SET NULL`; portal predicate |
+| Discovery | `src/app/apply/apply-form.tsx` | Optional "create a creator account" link before and after applying; `/apply` itself unchanged |
+| Tests | `tests/creator-signup.test.ts` | Validation, consent, password policy, role deny, applied state, and source guards against owner role / fake verification |

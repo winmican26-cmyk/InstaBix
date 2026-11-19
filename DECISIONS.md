@@ -175,6 +175,18 @@
 - The reference seed (six demo creators and one demo product ready to publish) is rejected outright: no demo or fabricated rows ship in production. A repo-wide search for those handles and the demo product title found no shipped data rows.
 - Client-supplied `is_first_product` remains advisory: the count-derived ordinal is stored and the publish request field is deliberately ignored (`main.py:982`).
 
+## D21 — Real creator self-registration and role-gated portal (2026-11-19)
+
+- The user asked for real accounts, not mockups: creators register themselves in the root Next.js app instead of any seeded demo rows. `/apply` stays account-free and keeps writing real `creator_accounts`; `/creator/signup` additionally creates a real login. `backend/**` and `frontend/**` remain untouched (D01/D09/D16).
+- Access control is centralized in `getWorkspace()` (`src/lib/auth/session.ts`), not just the `(app)` layout. A creator membership never resolves a workspace, so operator pages, every action in `src/lib/actions/**`, and the four `src/app/api/export/**` routes that call `getWorkspace()` directly all fail closed. `canAccessOperator()` is a pure deny rule in `src/lib/auth/roles.ts`; `canManage`/`canReview` behavior is unchanged.
+- Registration creates `users` + `memberships(role:"creator")` + `creator_accounts` + `consents` + an audit event in one transaction, then issues an opaque DB session. The membership role is a constant and cannot be influenced by form input; owner/admin is impossible from this action. `creator_accounts.userId` is the explicit login-to-application link and the portal additionally filters on it, so one creator never reads another's row even inside the shared RLS tenant.
+- The role predicate is an explicit allowlist (`owner`/`admin`/`operator`/`reviewer`), not "anything that is not creator", so an unknown runtime value cannot fail open. The independent judge also caught two entry points that used only `getSessionUser()`/`requireUser()`: `/onboarding` and `createOrgAction`. Both now require at least one operator-eligible membership, and `setActiveOrg()` refuses creator memberships. A creator session therefore cannot read operator onboarding aggregates or mint itself an `owner` workspace.
+- The applied-state contract is identical to `/apply`: `source="applied"`, `status="new"`, `consentStatus="granted"`, `emailSource="creator_provided"`. Registration never approves a creator, sends outreach, or publishes anything (D03/D12/D14).
+- Email verification is honest: `users.emailVerifiedAt` is nullable and signup writes `NULL`. No verification timestamp is fabricated because no mail-provider credential exists. Delivery is deferred until a provider is configured; the portal states this plainly. This is the user-approved "mark unverified, defer delivery" decision.
+- Public registration is consent-first and bounded by `creator-signup:${ip}` at 5 attempts/hour, reusing the same scrypt password policy as operator signup. Duplicate email/handle checks are friendly early exits; the existing unique indexes remain the authoritative concurrency guard.
+- Schema addition is additive and keeps 33 tables: `users.email_verified_at`, `creator_accounts.user_id` with FK and index, applied by `drizzle/0005_creator_signup.sql`. No enum, split, money or branding rule changed; the forbidden legacy brand is not emitted anywhere.
+- Seeded data is still operator-only (`scripts/seed.ts`); no demo creator or fabricated metric is introduced.
+
 ## Deliberately not done in this session
 
 - No legacy kit code was imported, adapted into production, or shipped.

@@ -27,6 +27,13 @@ export function ApplyForm() {
         <Button asChild variant="outline" className="mt-6">
           <a href="/for-creators">Back to the creator page</a>
         </Button>
+        <p className="mt-4 text-[12px] text-muted">
+          Want to track this application?{" "}
+          <a href="/creator/signup" className="text-lime hover:underline">
+            Create a creator account
+          </a>
+          .
+        </p>
       </div>
     );
   }
@@ -85,7 +92,11 @@ export function ApplyForm() {
           {pending ? "Submitting…" : "Submit application"}
         </SubmitButton>
         <p className="text-center text-[11px] leading-4 text-faint">
-          You can withdraw consent and request deletion at any time. No account is required.
+          You can withdraw consent and request deletion at any time. An account is optional, but{" "}
+          <a href="/creator/signup" className="text-lime hover:underline">
+            registering lets you track your application
+          </a>
+          .
         </p>
       </div>
     </form>

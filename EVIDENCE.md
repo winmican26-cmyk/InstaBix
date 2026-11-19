@@ -503,3 +503,39 @@ D20 in `DECISIONS.md` records the verdict. The pasted blocks 8–9 were treated 
 | `is_first_product BOOLEAN DEFAULT TRUE` as client authority | Constrained | Column retained as stored ordinal (`0001_stage2.sql:78`); publish ignores the request field (`main.py:982`) |
 
 **Verdict:** no genuine functional gap and no atom required. The reference triggers and full 200-line DDL were not pasted and are not needed: CHECK constraints come from SQLAlchemy metadata and the additive migration runner.
+
+## 13. Real creator self-registration (2026-11-19)
+
+D21 in `DECISIONS.md` records the decisions; `TRACEABILITY.md` section 10 maps the surface. The user explicitly chose "register accounts instead of mockups", the role-gated creator portal, and honest unverified email state.
+
+### 13.1 Atom graph and risk
+
+| Atom | Risk | Boundary | Result |
+| --- | --- | --- | --- |
+| ACCESS-1 | High | `src/lib/auth/roles.ts`, `src/lib/auth/session.ts`, `src/app/onboarding/page.tsx`, `src/lib/actions/org.ts` | Creator role denied centrally in `getWorkspace()` (pages, actions, `/api/export/**`); the two entry points that used only `getSessionUser()`/`requireUser()` now reject creator-only sessions too, so `/onboarding` aggregates and owner-minting `createOrgAction` are unreachable; creator sessions redirect to `/creator` |
+| SIGNUP-1 | High | `src/app/creator/**`, `src/lib/creator-signup.ts`, schema + `drizzle/0005` | Real transactional registration, scoped session, unverified state, applied contract |
+| TESTS-1 | Medium | `tests/creator-signup.test.ts` | Validation, consent, password policy, role deny, applied state, high-risk source invariants |
+| DOCS-1 | Low | D21, this section, traceability §10, README §7g | Decision and evidence recorded |
+
+The producer deliberately did **not** only patch `(app)/layout.tsx`: four export routes call `getWorkspace()` directly, so the deny was placed in the shared resolver to fail closed everywhere.
+
+### 13.2 Deterministic gates
+
+```text
+npm run typecheck   clean
+npm test            7 files, 70 tests passed (was 6 files, 55 tests)
+npm run lint        clean
+npm run build       compiled successfully; /creator and /creator/signup listed as dynamic routes
+git diff --check    clean
+legacy-brand audit  derived_pattern_length=12; shipped_scope_files=231; forbidden_hits=0
+```
+
+No change was made under `backend/**` or `frontend/**`. No external credentials were used or required.
+
+### 13.3 Independent judge verdict
+
+First pass: **REQUEST-CHANGES**. The judge found two real authorization gaps that the centralized `getWorkspace()` deny did not cover: `/onboarding` read operator aggregates with only `getSessionUser()`, and `createOrgAction` used only `requireUser()` before inserting an `owner` membership — so a creator session could see operator data and mint itself an owner workspace. It also found `canAccessOperator()` was a blacklist and would fail open for an unknown runtime role.
+
+Resolution: added the pure allowlist plus `hasOperatorMembership()` in `src/lib/auth/roles.ts`; both entry points now reject creator-only sessions; `setActiveOrg()` also rejects creator memberships. The judge's non-blocking notes were also fixed: the duplicate-handle pre-check now binds `app.org_id` through `withOrg()`, omitted `niche` is coerced before Zod, and the portal's no-linked-application state no longer links back to the signup page that would redirect it away. Tests grew from 66 to 70 to cover the allowlist and both entry-point guards.
+
+Second pass: **ACCEPT**. The independent judge re-ran read-only typecheck/lint/diff checks, counted 70 `it()` cases across 7 files, and swept every remaining `getSessionUser()`/`requireUser()` site. Final table: all 14 checks PASS, including no creator access to operator data or owner self-elevation, fail-closed allowlist, transaction atomicity, honest unverified email, RLS-bound dedupe, portal isolation, schema/migration consistency and no mock data. `backend/**` and `frontend/**` remain untouched. The only residual observation is a non-blocking redirect loop for a role string that cannot exist under the current Postgres enum; it grants no access.

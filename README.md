@@ -51,7 +51,7 @@ Open `http://localhost:3000`.
 
 - Root stack: Drizzle `0.45.4` with `pg`.
 - Schema: 33 tables in `src/lib/db/schema.ts`.
-- Migrations: `drizzle/0000` through `drizzle/0004`.
+- Migrations: `drizzle/0000` through `drizzle/0005` (0005 adds the creator-registration verification state and login link).
 - `DATABASE_URL` is the application role and must not be a superuser in production.
 - `DATABASE_URL_ADMIN` is for migration/seed ownership only.
 - RLS verification script: `scripts/verify/rls.sql`.
@@ -233,11 +233,22 @@ The pasted frontend shell and SQL migration are legacy reference, not a patch. N
 
 Rejected from the reference: the old brand and framework pins, UUID ids, NUMERIC-authoritative money and splits, a client-bool `calc_split()` SQL function, permissive creator statuses, and the six demo creators plus one demo product. The niche vocabulary is already identical. Split ordinals remain derived from stored product counts (`main.py:842-860`) with a 409 on client override. See `DECISIONS.md` D20, `EVIDENCE.md` section 12 and `TRACEABILITY.md` section 9.
 
+## 7g. Creator self-registration
+
+Creators can register a real account at `/creator/signup`. It files the same consent-backed application as `/apply` (which remains account-free) and gives the creator a private `/creator` portal for their own status and consent record.
+
+- Registration is transactional: `users` + `memberships(role:"creator")` + `creator_accounts` + `consents` + an audit event, then a scoped `ibx_session` cookie. No seeded or demo creator rows are involved.
+- A creator membership cannot resolve an operator workspace. The deny lives in `getWorkspace()` so `(app)` pages, all workspace actions and the `/api/export/**` routes fail closed together; creator sessions are redirected to `/creator`.
+- Creator accounts get only the creator role — never owner/admin — and cannot approve creators, send outreach, publish products, open revenue/audit/settings, or read another creator's record.
+- The application is stored as `applied` / `new` / `granted` / `creator_provided`. Nothing is approved, sent or published automatically.
+- Email is recorded as **unverified** (`users.emailVerifiedAt IS NULL`). Verification delivery is intentionally deferred until a mail provider is configured; no verified state is fabricated.
+- Registration is limited to 5 attempts per network per hour and uses the same scrypt password policy as operator signup. See `DECISIONS.md` D21, `EVIDENCE.md` section 13 and `TRACEABILITY.md` section 10.
+
 ## 8. Known blockers
 
 - No clean-clone CI run has been demonstrated.
 - No real Meta/Instagram account test: credentials and registered test accounts required.
-- No real Resend send/reply/unsubscribe test: credentials, verified domain, and real inbox required.
+- No real Resend send/reply/unsubscribe test: credentials, verified domain, and real inbox required. Creator email verification delivery is therefore deferred; signup stores an honest unverified state only.
 - No real Stripe test-mode purchase/refund/statement reconciliation: credentials required.
 - No Whop sandbox publish: sandbox key required; live `get_product` was exercised only with a monkeypatched transport.
 - `POST /api/whop/webhook` is a 501 `(Next)` stub: signature verification, idempotency and a sale/payout ledger remain a later cut.

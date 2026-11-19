@@ -5,6 +5,7 @@ import { count, eq } from "drizzle-orm";
 import { ArrowRight, Check, Circle, Mail, Sparkles, Users } from "lucide-react";
 import { Instagram } from "@/components/brand/instagram-glyph";
 import { getMemberships, getSessionUser } from "@/lib/auth/session";
+import { canAccessOperator, hasOperatorMembership } from "@/lib/auth/roles";
 import { withOrg } from "@/lib/db";
 import { creatorAccounts, integrations, sequences } from "@/lib/db/schema";
 import { Mark } from "@/components/brand/wordmark";
@@ -39,7 +40,11 @@ export default async function OnboardingPage() {
     );
   }
 
-  const active = memberships.find((m) => m.org.id === session.orgId) ?? memberships[0]!;
+  // A creator-only session must never read operator onboarding aggregates.
+  if (!hasOperatorMembership(memberships.map((m) => m.role))) redirect("/creator");
+
+  const eligible = memberships.filter((m) => canAccessOperator(m.role));
+  const active = eligible.find((m) => m.org.id === session.orgId) ?? eligible[0]!;
   const org = active.org;
 
   const [ig] = await withOrg(org.id, (tx) =>

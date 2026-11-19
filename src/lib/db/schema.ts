@@ -116,6 +116,9 @@ export const users = pgTable(
     email: text("email").notNull(),
     name: text("name").notNull(),
     passwordHash: text("password_hash").notNull(),
+    // NULL is the honest unverified state. No mail provider is configured yet,
+    // so nothing writes this except a real verification event in a future cut.
+    emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
     lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
@@ -293,6 +296,9 @@ export const creatorAccounts = pgTable(
     status: creatorStatusEnum("status").notNull().default("new"),
     notes: text("notes"),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    // Explicit link from the login to the application. Portal reads filter on
+    // this column in addition to RLS so one creator never sees another's row.
+    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -300,6 +306,7 @@ export const creatorAccounts = pgTable(
     uniqueIndex("creators_org_username_idx").on(t.orgId, t.username),
     index("creators_org_status_idx").on(t.orgId, t.status),
     index("creators_org_created_idx").on(t.orgId, t.createdAt),
+    index("creators_user_idx").on(t.userId),
   ],
 );
 

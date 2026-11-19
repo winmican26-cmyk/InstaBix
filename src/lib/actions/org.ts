@@ -6,7 +6,8 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { memberships, orgs, sessions } from "@/lib/db/schema";
-import { getSessionUser, requireUser } from "@/lib/auth/session";
+import { getMemberships, getSessionUser, requireUser } from "@/lib/auth/session";
+import { canAccessOperator, hasOperatorMembership } from "@/lib/auth/roles";
 import { insertAudit } from "@/lib/audit";
 import { slugify } from "@/lib/utils";
 
@@ -15,11 +16,12 @@ export async function setActiveOrg(orgId: string): Promise<void> {
   if (!session) redirect("/login");
 
   const [membership] = await db
-    .select({ id: memberships.id })
+    .select({ id: memberships.id, role: memberships.role })
     .from(memberships)
     .where(and(eq(memberships.orgId, orgId), eq(memberships.userId, session.user.id)))
     .limit(1);
   if (!membership) redirect("/dashboard");
+  if (!canAccessOperator(membership.role)) redirect("/creator");
 
   await db.update(sessions).set({ orgId }).where(eq(sessions.tokenHash, session.tokenHash));
   revalidatePath("/", "layout");
@@ -30,6 +32,12 @@ export type OrgState = { error?: string };
 
 export async function createOrgAction(_prev: OrgState, formData: FormData): Promise<OrgState> {
   const user = await requireUser();
+  // Only a session with no memberships may create its first operator workspace.
+  // Creator memberships must never be able to mint an owner role for themselves.
+  const userMemberships = await getMemberships(user.id);
+  if (userMemberships.length > 0 && !hasOperatorMembership(userMemberships.map((m) => m.role))) {
+    return { error: "A creator account cannot create an operator workspace." };
+  }
   const parsed = z.object({ name: z.string().trim().min(2).max(80) }).safeParse({ name: String(formData.get("name") ?? "") });
   if (!parsed.success) return { error: "Give your workspace a name of at least 2 characters." };
 
