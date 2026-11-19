@@ -54,6 +54,22 @@ Five independently judged atoms were accepted after one or two rejection/fix cyc
 
 Stage 1 combined gates on 2026-11-19: root `npm run verify` passed (52 Vitest tests + production build); backend pytest `143 passed`, `compileall` clean; frontend typecheck and production build clean; 208 tracked files scanned with no legacy-brand hit.
 
+## Stage 2 database schema acceptance (2026-11-19)
+
+The pasted six-table schema was implemented in the FastAPI backend with independent producer/judge atoms. D16 in `DECISIONS.md` records the interpretation rulings (campaign UNIQUE, `instabix_only`, basis points / integer cents authoritative, root schema unchanged).
+
+| Atom | Final verdict | Core evidence |
+| --- | --- | --- |
+| STAGE2-SCHEMA | ACCEPT | Six tables with all required columns, JSONB variants, unique constraints and exact CHECK expressions; idempotent additive migration; 7 schema tests |
+| STAGE2-APP | REQUEST-CHANGES then fixed | `details.reasons` restored, 0/3/7 claim corrected, `before_flush` workaround removed at source; re-judged in the final integration pass |
+| STAGE2-TESTS | ACCEPT | Stage 2 vocabulary expectations plus 5 new end-to-end tests for campaigns, product mirrors, outreach reply state, settings lock and health |
+| STAGE2-MIGRATION-FIX | ACCEPT | Three real Postgres upgrade bugs found and fixed: portable boolean defaults, legacy creator-status remapping, JSON scalar preservation |
+| STAGE2-PUBLISH-FIX | ACCEPT | `details.reasons` contract restored, single publish route, direct `live` write, 503/retry/audit/idempotency preserved |
+
+Stage 2 combined gates on 2026-11-19: backend `156 passed`, `compileall` clean; root `npm run verify` passed (`52 tests` + production build); frontend typecheck and production build clean; 213 tracked files plus 4 new files scanned with no legacy-brand hit; live `GET /api/health` returned `status=ok`, `database=ok`; fresh-Postgres and legacy-Postgres migration smokes both passed with idempotent double-runs.
+
+Stage 2 residuals: `STEP_DELAY_DAYS` provides 0/3/7 dates but only day 0 is initialized — advancing `current_step` to 2/3 and recomputing `next_followup_at` is a separate atom. The 50/day cap, warmup, and real-provider credential gaps from Stage 1 remain unchanged. The root app still uses its own 33-table schema; no dual-write layer was added.
+
 ## Verification strategy
 
 1. **Static gates:** root `npm run typecheck`, `npm run lint`, `npm run test`, `npm run build`; frontend `npm run typecheck`, `npm run build`; backend pytest and `compileall`.

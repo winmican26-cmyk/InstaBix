@@ -23,6 +23,28 @@ NICHES: tuple[str, ...] = (
 )
 BRANDING = "hybrid"
 
+# Stage 2 schema vocabularies. ``BRANDING`` above stays locked to "hybrid";
+# these tuples describe the allowed per-product / per-creator field values.
+PRODUCT_BRANDING: tuple[str, ...] = ("hybrid", "creator_only", "instabix_only")
+CREATOR_STATUSES: tuple[str, ...] = (
+    "New",
+    "Qualified",
+    "Contacted",
+    "Replied",
+    "Shortlisted",
+    "Partnered",
+    "Rejected",
+)
+PRODUCT_STATUSES: tuple[str, ...] = (
+    "idea",
+    "toc_approved",
+    "draft",
+    "creator_approved",
+    "live",
+    "rejected",
+)
+EMAIL_STEPS: tuple[int, ...] = (1, 2, 3)
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(

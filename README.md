@@ -194,6 +194,18 @@ Required email configuration now includes `RESEND_API_KEY`, `OUTREACH_FROM`, `EM
 
 Stage 1 code is complete and independently accepted for Scout, approval/outreach safety, Product Architect, and the Whop Integrator. Live provider paths remain credential-blocked (Meta, Resend, Stripe, Whop sandbox, writer/plagiarism/Google Doc/PDF). Known engineering residuals are listed in `EVIDENCE.md` section 6 and `DECISIONS.md` D12–D15.
 
+## 7c. Stage 2 database schema
+
+The FastAPI backend now implements the six-table Stage 2 schema: `creators`, `campaigns`, `products`, `emails`, `sales`, `settings`. Required columns, uniqueness, relationships and CHECK constraints are in `backend/app/models.py`; the readable Postgres DDL is `backend/migrations/0001_stage2.sql`. `backend/app/migrate.py` upgrades an existing database additively and idempotently (no data deletion), backfilling the new decimal mirrors from the authoritative integer columns.
+
+- Creator niche/status and product branding/status use the Stage 2 vocabularies. The operator-only branding value is `instabix_only`; the global `/api/settings` branding stays locked to `hybrid`.
+- Basis points and integer cents remain the source of truth; `split_creator`/`split_operator` mirror `0.60/0.40` or `0.50/0.50` and always sum to `1.00`.
+- `campaigns.creator_id` is unique (one campaign per creator); duplicate creation returns a clear 409.
+- Outreach emails carry `step` 1-3 plus `opened`/`replied`; sales carry decimal payout mirrors, `whop_order_id` and `sold_at`.
+- Product publish writes status `live` at the source in `backend/app/agents/agent4.py`; there is no session-level status rewrite.
+
+Gates on 2026-11-19: backend `156 passed` with clean `compileall`; root `npm run verify` passed (`52 tests` + production build); frontend typecheck and production build clean; fresh and legacy Postgres migration smokes passed; live health check returned `database=ok`. See `EVIDENCE.md` section 7 and `DECISIONS.md` D16.
+
 ## 8. Known blockers
 
 - No clean-clone CI run has been demonstrated.

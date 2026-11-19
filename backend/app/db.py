@@ -8,7 +8,8 @@ from sqlalchemy import Engine, create_engine, event, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.models import AppSetting, Base
+from app.migrate import migrate_schema
+from app.models import Base, Setting
 
 
 def make_engine(database_url: str) -> Engine:
@@ -36,6 +37,7 @@ def make_session_factory(engine: Engine) -> sessionmaker[Session]:
 
 def init_db(engine: Engine) -> None:
     Base.metadata.create_all(engine)
+    migrate_schema(engine)
 
 
 DEFAULT_SETTINGS: dict[str, object] = {
@@ -47,10 +49,10 @@ DEFAULT_SETTINGS: dict[str, object] = {
 
 
 def seed_default_settings(session: Session) -> None:
-    existing = set(session.scalars(select(AppSetting.key)).all())
+    existing = set(session.scalars(select(Setting.key)).all())
     for key, value in DEFAULT_SETTINGS.items():
         if key not in existing:
-            session.add(AppSetting(key=key, value=value))
+            session.add(Setting(key=key, value=value))
     session.commit()
 
 

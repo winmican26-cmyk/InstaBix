@@ -385,7 +385,7 @@ def publish_product(db: Session, product: Product, client: WhopClient) -> Publis
     """
     validate_publishable(product)
 
-    if product.status == "published" and product.whop_product_id and product.bio_link:
+    if product.status in {"live", "published"} and product.whop_product_id and product.bio_link:
         whop = {
             "whop_product_id": product.whop_product_id,
             "whop_plan_id": product.whop_plan_id,
@@ -449,7 +449,7 @@ def publish_product(db: Session, product: Product, client: WhopClient) -> Publis
     product.bio_link = bio_link
     product.story_templates = story_templates
     product.launch_captions = launch_captions
-    product.status = "published"
+    product.status = "live"
     product.published_at = utcnow()
     db.commit()
     db.refresh(product)

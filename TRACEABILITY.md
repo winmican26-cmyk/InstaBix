@@ -15,7 +15,7 @@ The page is an async Server Component (`frontend/app/page.tsx`) with `dynamic = 
 | Products | `GET /api/products` | `products.title`, `status`, `slug`, `split.creator_share`, `split.platform_share` | `products`, `chapters`, `drafts`, `creatorAccounts` via `listProducts()` / `getProductDetail()` | Backend product/TOC and split tests passed; frontend build passed |
 | Revenue | `GET /api/revenue` | `sales` aggregates: `sales_count`, `gross_cents`, `refunded_cents`, `net_cents`, `creator_cents`, `instabix_cents`; recent items | `ledgerEntries`, `orders`, `statements`, `creatorAccounts` via `getRevenue()` | Backend payout/refund tests passed; root Vitest `10 passed` |
 | Whop status | `GET /api/whop` | `WhopClient.status()` fields `mode`, `configured`, `mock`, `publish_ready`, `account_id`, `api_base`, `api_version_date`, `note`, plus route-added `branding` and `publish_endpoint`; no credentials are rendered | `integrations` via `getIntegrations()`; not runtime-tested this session | Backend Whop tests passed; no live publish performed |
-| Settings & locked rules | `GET /api/settings` | `app_settings` values plus server config `BRANDING`, `NICHES`, `_split_payload()` | `memberships`, `users`, `invites` via `getSettings()` — different root settings surface | Frontend judge confirmed no hard-coded split/branding; `PUT` rejects non-`hybrid` branding |
+| Settings & locked rules | `GET /api/settings` | `settings.key/value` plus server config `BRANDING`, `NICHES`, `_split_payload()` | `memberships`, `users`, `invites` via `getSettings()` - different root settings surface | Frontend judge confirmed no hard-coded split/branding; `PUT` rejects non-`hybrid` branding |
 
 ## 2. Root application surfaces (`src/`, port 3000)
 
@@ -44,7 +44,7 @@ These routes exist from prior work and are included in the passing root typechec
 | `/api/products` | `Product` / `products` | `price_cents`, `is_first_product`, `split_creator_bps`, `split_platform_bps`, `toc`, approval fields |
 | `/api/whop`, `POST /api/whop/publish` | `WhopClient` + `products.whop_product_id`, `whop_plan_id`, `bio_link` | Mock/live/disabled modes; official v1 API only in live mode |
 | `/api/revenue` | `Sale` / `sales` | Integer cents and basis-point snapshot; no floating-point money |
-| `/api/settings` | `AppSetting` / `app_settings` plus server config | Locked branding/niches/splits; mutable sender/support/pause values |
+| `/api/settings` | `Setting` / `settings` plus server config | Locked branding/niches/splits; mutable sender/support/pause values; legacy `app_settings` was migrated, not deleted |
 
 ## 4. Traceability gaps
 
@@ -67,3 +67,20 @@ These routes exist from prior work and are included in the passing root typechec
 | Whop audit, retry, approval, blocked assets | `backend/app/whop.py`, `backend/app/routers/whop.py`, `backend/app/agents/agent4.py` | 27 backend tests; `GET /api/whop/audit`; no secrets in audit; no fabricated links |
 
 Stage 1 residuals that affect live traceability: `/api/scout` does not forward the optional scoring inputs or expose `rank_creators`; the Whop audit sink and affiliate link are not persisted; `no_response` is not yet set by a sequence orchestrator; root `publishProductAction` only changes local status. See `EVIDENCE.md` section 6.
+
+## 6. Stage 2 six-table schema (2026-11-19)
+
+The Stage 2 schema is authoritative in the FastAPI backend. `src/lib/db/schema.ts` is intentionally unchanged (D16); the root app keeps its 33-table multi-tenant model.
+
+| Spec table | Backend model / table | Stage 2 fields added or aligned | Root equivalent (not changed) |
+| --- | --- | --- | --- |
+| `creators` | `Creator` / `creators` | globally unique `handle`; `engagement_rate`, `monetization_score`, `top_reels`, `content_pillars`; 6-value `niche` CHECK; 7-value title-case `status` CHECK | `creatorAccounts` + `creatorSnapshots` + `scores` + `media` |
+| `campaigns` | `Campaign` / `campaigns` | unique `creator_id` FK, `sequence_status`, `reply_classification`, `current_step` (1-3), `next_followup_at` | `campaigns` (nullable non-unique `creatorId`) + `sequences` + `sequenceSteps` |
+| `products` | `Product` / `products` | `word_count`, `branding`, `whop_url`, `content_md`, decimal `price` / `split_creator` / `split_operator` mirrors, 6-value `status` CHECK | `products` + `chapters` + `drafts` (basis points remain authoritative in both) |
+| `emails` | `Email` / `emails` | `step` (1-3 CHECK), `opened`, `replied` | `messages` + `sequenceSteps` |
+| `sales` | `Sale` / `sales` | decimal `amount` / `payout_creator` / `payout_operator` mirrors, `whop_order_id`, `sold_at` | `orders` + `refunds` + `ledgerEntries` + `statements` |
+| `settings` | `Setting` / `settings` | `id`, unique `key`, JSONB value; legacy `app_settings` copied forward and left intact | `featureFlags` + `rateLimits` + `orgs.settings` |
+
+Authoritative vs mirror columns: basis points (`split_creator_bps` = 6000/5000, `split_platform_bps` = 4000/5000) and integer cents (`price_cents`, `gross_cents`, `creator_cents`, `platform_cents`) drive all arithmetic. The Stage 2 decimal columns are persisted mirrors with CHECK constraints (`= 10000` bps, `= 1.00` decimals). The operator-only branding value is `instabix_only`; the global `/api/settings` branding value stays locked to `hybrid`.
+
+Migration evidence: `backend/app/migrate.py` is additive and idempotent; `backend/migrations/0001_stage2.sql` is the readable Postgres target DDL. Both fresh and legacy-upgrade paths were executed against a real Postgres instance on 2026-11-19 (see `EVIDENCE.md` section 7).

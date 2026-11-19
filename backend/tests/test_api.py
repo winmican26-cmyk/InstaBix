@@ -119,9 +119,9 @@ def test_scout_qualifies_and_persists_creator(
     assert listed.status_code == 200
     assert listed.json()["count"] == 1
     assert listed.json()["items"][0]["id"] == creator_id
-    assert listed.json()["items"][0]["status"] == "qualified"
-    assert client.get("/api/scout?status=qualified").json()["count"] == 1
-    assert client.get("/api/scout?status=unqualified").json()["count"] == 0
+    assert listed.json()["items"][0]["status"] == "Qualified"
+    assert client.get("/api/scout?status=Qualified").json()["count"] == 1
+    assert client.get("/api/scout?status=Rejected").json()["count"] == 0
 
     fetched = client.get(f"/api/scout/{creator_id}")
     assert fetched.status_code == 200
@@ -272,7 +272,7 @@ def test_publish_gate_then_default_mock_publish(
     assert published["published"] is True
     assert published["created"] is True
     assert published["whop"]["mock"] is True
-    assert published["product"]["status"] == "published"
+    assert published["product"]["status"] == "live"
     assert published["product"]["creator_approved"] is True
 
 

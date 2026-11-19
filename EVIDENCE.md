@@ -259,3 +259,90 @@ Stage-specific judge evidence:
 | Offline product prose is deterministic/templated; writer/plagiarism/Google Doc/PDF adapters need credentials | Configure real adapters and re-judge quality |
 | Whop audit sink is in-memory; affiliate links not persisted; `hot_reply`/`sale_made` hooks have no emitters | Add durable audit storage, product columns, and event call sites |
 | Root `publishProductAction` does not call Whop; two backends remain | Decide one authoritative publish path before production |
+
+## 7. Stage 2 six-table schema (2026-11-19)
+
+### Atoms and verdicts
+
+| Atom / fix | Judge history | Final verdict |
+| --- | --- | --- |
+| STAGE2-SCHEMA | No rejection; metadata, CHECK dump, JSONB compile, migration idempotency and 7 schema tests verified against real code | ACCEPT |
+| STAGE2-APP | REQUEST-CHANGES (missing `details.reasons`, overstated 0/3/7 scheduling, `before_flush` workaround, undisclosed failures) -> fixed at source + re-judged | ACCEPT |
+| STAGE2-TESTS | Producer delivered 5 new end-to-end tests and corrected all 5 vocabulary expectations; verified for meaningfulness | ACCEPT |
+| STAGE2-MIGRATION-FIX | Three real Postgres upgrade bugs found and fixed; non-destructive, idempotent, portable behavior re-judged | ACCEPT |
+| STAGE2-PUBLISH-FIX | `details.reasons` contract, single publish route, direct `live` write, 503/retry/audit/idempotency re-judged | ACCEPT |
+
+Final publish-path judge runtime probes: `POST /api/whop/publish count = 1` (only `publish_stage2`); a `creator_approved=True, status="draft"` product is blocked with `reasons == ['Product status must be creator_approved before publishing.']`; a direct `publish_product()` call persists `status="live"` without a CHECK violation; `32 passed` across `test_agent4.py`, `test_api.py` and `test_stage2_api.py`; `compileall` clean.
+
+### Producer/judge evidence
+
+- STAGE2-SCHEMA runtime CHECK dump (from `Base.metadata`, mirrored in real Postgres): `ck_products_split_bps_sum => split_creator_bps + split_platform_bps = 10000`; `ck_products_split_mirror_sum => split_creator + split_operator = 1.00`; `ck_products_branding => branding IN ('hybrid','creator_only','instabix_only')`; `ck_creators_niche` with the 6 spec values; `ck_creators_status` with the 7 title-case values; `ck_products_status` with the 6 spec values; `ck_campaigns_current_step` and `ck_emails_step` in 1..3.
+- JSONB variant runtime check: `SQLite JSON type: JSON` / `Postgres JSON type: JSONB`.
+- Publish gate: `validate_publishable` is called in `main.py.publish_stage2`, so the 409 body keeps `details.reasons` (`test_agent4.py:47` passes). A creator-approved boolean with `status="draft"` is still blocked. `agent4.py` now writes `status="live"` directly; the former `before_flush` rewrite and shadowed `/api/whop/publish` route were removed. Only one publish route remains.
+
+### Three real Postgres bugs found and fixed during upgrade verification
+
+1. `migrate._default_sql` emitted integer `0/1` for BOOLEAN columns; Postgres rejected `ALTER TABLE emails ADD COLUMN opened BOOLEAN DEFAULT 0`. Now emits `TRUE`/`FALSE`, which both dialects accept. Locked by `test_migration_boolean_defaults_are_portable`.
+2. Legacy lowercase creator statuses violated `ck_creators_status` on upgrade. `_backfill_creators` now maps every known Stage 1 status (`new`, `reviewing`, `qualified`, `unqualified`, `approved`, `contacted`, `negotiating`, `partnered`, `declined`, `suppressed`) to the 7 Stage 2 values. Locked by the `Qualified` assertion in `test_migrate_schema_is_idempotent_and_backfills_mirrors`.
+3. `_load_json` returned `None` for already-decoded JSON scalar strings from a JSONB driver, losing `app_settings.value='hybrid'` during the copy to `settings`. It now preserves literal scalars; locked by the ORM read assertion in the same test.
+
+### Real Postgres smokes (throwaway databases, dropped after each run)
+
+Fresh database + two `migrate_schema` calls:
+
+```text
+TABLES= ['campaigns', 'creators', 'emails', 'products', 'sales', 'settings']
+CHECK_COUNT= 21  (19 table CHECKs + 2 PostgreSQL domain CHECKs)
+JSONB_COLUMNS= [('creators', 'content_pillars', 'jsonb'), ('creators', 'qualification', 'jsonb'),
+ ('creators', 'recent_reel_views', 'jsonb'), ('creators', 'top_reels', 'jsonb'),
+ ('emails', 'classification_detail', 'jsonb'), ('products', 'launch_captions', 'jsonb'),
+ ('products', 'story_templates', 'jsonb'), ('products', 'toc', 'jsonb'), ('settings', 'value', 'jsonb')]
+POSTGRES_SMOKE_OK
+```
+
+Legacy-shaped database + two `migrate_schema` calls:
+
+```text
+CREATOR= [{'status': 'Qualified', 'engagement_rate': Decimal('0.045000'), 'monetization_score': 72}]
+PRODUCT= [{'status': 'creator_approved', 'price': Decimal('19.00'), 'word_count': 7000,
+           'split_creator': Decimal('0.60'), 'split_operator': Decimal('0.40')}]
+SALE= [{'amount': Decimal('19.00'), 'payout_creator': Decimal('11.40'),
+        'payout_operator': Decimal('7.60'), 'whop_order_id': 'sale_legacy_1', 'sold_at': datetime(...)}]
+SETTINGS= [{'key': 'branding', 'value': 'hybrid'}]
+LEGACY_PG_SMOKE_OK
+```
+
+### Combined gates on 2026-11-19
+
+```text
+backend: .\.venv\Scripts\python.exe -m pytest --tb=line
+156 passed, 1 warning in 8.14s
+
+backend: .\.venv\Scripts\python.exe -m compileall -q app tests
+compileall_exit=0
+
+root: npm run verify
+> instabix@0.1.0 typecheck   (clean)
+> instabix@0.1.0 lint        (clean)
+> instabix@0.1.0 test        (5 files passed, 52 tests passed)
+> instabix@0.1.0 build       (production build succeeded)
+
+frontend: npm run typecheck  (clean)
+frontend: npm run build      (compiled successfully)
+
+legacy-brand audit (213 tracked files + 4 new files, excluding node_modules/.next/.venv/reference)
+TRACKED_FILES_CHECKED=213
+NO_LEGACY_BRAND_IN_TRACKED_OR_NEW_FILES
+
+live smoke: uvicorn app.main:app --port 8011 -> GET /api/health
+{"status":"ok","version":"0.1.0","env":"development","branding":"hybrid","database":"ok"}
+LIVE_HEALTH_STATUS=OK
+```
+
+### Stage 2 residuals
+
+| Residual | Owner action |
+| --- | --- |
+| `STEP_DELAY_DAYS` computes 0/3/7 but only day 0 is initialized; `current_step` never advances to 2/3 and `next_followup_at` is not recomputed | Add a sequence-advancement atom and test it |
+| Root app keeps its 33-table schema; no dual-write layer | Decide one authoritative schema before multi-backend production (D16) |
+| Postgres live-provider credentials still unavailable | Obtain Meta, Resend, Stripe, Whop sandbox, writer/AI and checker credentials before calling M2-M6 Done |

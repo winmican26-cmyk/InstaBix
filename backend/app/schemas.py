@@ -6,9 +6,23 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
+from app import config as app_config
 from app.agents.agent2 import TEMPLATE_KEYS
 from app.agents.agent3 import MAX_WORDS, MIN_WORDS
 from app.config import NICHES
+
+# Stage 2 vocabularies. These are mirrors of the DB CHECK constraints; the
+# locked split rules and the global branding lock are deliberately untouched.
+BRANDING_VALUES: tuple[str, ...] = app_config.PRODUCT_BRANDING
+PRODUCT_STATUSES: tuple[str, ...] = app_config.PRODUCT_STATUSES
+CREATOR_STATUSES: tuple[str, ...] = app_config.CREATOR_STATUSES
+EMAIL_STEPS: tuple[int, ...] = app_config.EMAIL_STEPS
+
+
+def _enum_value(value: str, values: tuple[str, ...], label: str) -> str:
+    if value not in values:
+        raise ValueError(f"{label} must be one of: {', '.join(values)}")
+    return value
 
 
 def normalize_handle(handle: str) -> str:
@@ -78,9 +92,16 @@ class ProductCreate(BaseModel):
     niche: str | None = Field(default=None, max_length=64)
     price_cents: int = Field(ge=100, le=100_000_000)
     target_words: int = Field(default=7_000, ge=MIN_WORDS, le=MAX_WORDS)
+    word_count: int = Field(default=7_000, ge=0)
+    branding: str = Field(default="hybrid", max_length=16)
     generate_toc: bool = True
     toc: dict[str, Any] | None = None
     is_first_product: bool | None = None
+
+    @field_validator("branding")
+    @classmethod
+    def _branding(cls, value: str) -> str:
+        return _enum_value(value, BRANDING_VALUES, "Branding")
 
     @field_validator("title")
     @classmethod

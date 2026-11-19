@@ -119,6 +119,17 @@
 - The audit sink and notification events are process-local in Stage 1; durable storage, persisted affiliate links, and hot-reply/sale-made emitters are follow-up work.
 - Root `publishProductAction` still only changes local product status. External Whop publishing remains the FastAPI Integrator's responsibility in this two-backend architecture; adding a second unverified TypeScript Whop client was rejected as scope creep for Stage 1.
 
+## D16 — Stage 2 database schema interpretation (2026-11-19)
+
+- The six-table schema in the Stage 2 block is implemented in the FastAPI backend, whose tables already use those names. The root app keeps its richer 33-table multi-tenant model; a compatibility matrix is documented in `TRACEABILITY.md`.
+- The forbidden legacy operator-brand token in the pasted enum is replaced by `instabix_only`. Product-level branding accepts `hybrid` (default), `creator_only`, and `instabix_only`. The global `/api/settings` branding value remains locked to `hybrid`.
+- `campaigns.creator_id` is a UNIQUE FK because the key-column list is more specific than the text ER diagram. This makes one active campaign per creator; the ER text is recorded as a conflict.
+- Split columns `split_creator` / `split_operator` mirror the locked basis-point values as decimals (`6000/10000 = 0.60`, `4000/10000 = 0.40`; sum exactly 1.00). Basis points remain authoritative for money math; no floating-point value is used to compute payouts.
+- Money columns named `amount`, `payout_creator`, and `payout_operator` are decimal mirrors of the authoritative integer-cent values. Integer cents remain the source of truth for all ledger arithmetic.
+- Product status uses the spec vocabulary `idea / toc_approved / draft / creator_approved / live / rejected`; creator status uses the spec's title-case vocabulary. Root-app status vocabularies are unchanged and mapped in documentation.
+- `settings` replaces `app_settings` in the backend and gains `id`, unique `key`, and JSON value (JSONB on Postgres, JSON on SQLite).
+- New columns are added idempotently by an explicit backend migration runner; fresh databases receive full CHECK constraints from SQLAlchemy metadata.
+
 ## Deliberately not done in this session
 
 - No legacy kit code was imported, adapted into production, or shipped.

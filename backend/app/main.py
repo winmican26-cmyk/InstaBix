@@ -34,6 +34,8 @@ import secrets
 import time
 import uuid
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta
+from decimal import Decimal
 from typing import Any
 from urllib.parse import quote
 
@@ -43,7 +45,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select, text
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.agents.agent1 import qualify_creator
@@ -58,6 +60,7 @@ from app.agents.agent3 import (
     validate_draft,
     validate_toc,
 )
+from app.agents.agent4 import publish_product, validate_publishable
 from app.config import BRANDING, NICHES, Settings
 from app.db import (
     DEFAULT_SETTINGS,
@@ -67,14 +70,15 @@ from app.db import (
     seed_default_settings,
 )
 from app.deps import get_db, get_settings, get_whop
-from app.errors import AppError, Conflict, NotFound, ValidationFailed
-from app.models import AppSetting, Campaign, Creator, Email, Product, Sale, utcnow
+from app.errors import AppError, Conflict, NotFound, PublishBlocked, ValidationFailed
+from app.models import Campaign, Creator, Email, Product, Sale, Setting, utcnow
 from app.routers.whop import router as whop_router
 from app.schemas import (
     ApprovalRequest,
     ClassifyRequest,
     OutreachCreate,
     ProductCreate,
+    PublishRequest,
     RefundRequest,
     SaleCreate,
     ScoutRequest,
@@ -101,8 +105,74 @@ def _split_payload() -> dict[str, Any]:
     }
 
 
+# Stage 2 vocabulary. The locked sequence is exactly three steps, sent on
+# day 0, day 3 and day 7 relative to campaign creation.
+TEMPLATE_STEP: dict[str, int] = {"initial": 1, "follow_up": 2, "close_loop": 3}
+STEP_DELAY_DAYS: dict[int, int] = {1: 0, 2: 3, 3: 7}
+REPLY_SEQUENCE_STATUS: dict[str, str] = {
+    "POSITIVE": "shortlisted",
+    "SOFT_POSITIVE": "nurture",
+    "NEGATIVE": "do_not_contact",
+}
+CREATOR_STATUS_BY_VERDICT: dict[str, str] = {
+    "qualified": "Qualified",
+    "unqualified": "Rejected",
+    "failed": "Rejected",
+    "rejected": "Rejected",
+    "new": "New",
+}
+
+
+def _decimal_cents(cents: int) -> Decimal:
+    """Decimal mirror of an integer-cent amount; never used for money math."""
+    return (Decimal(int(cents)) / Decimal(100)).quantize(Decimal("0.01"))
+
+
+def _split_mirrors(creator_bps: int) -> tuple[Decimal, Decimal]:
+    """Mirror the server-derived basis points to decimals that sum to 1.00."""
+    creator = (Decimal(int(creator_bps)) / Decimal(10_000)).quantize(Decimal("0.01"))
+    operator = (Decimal("1.00") - creator).quantize(Decimal("0.01"))
+    return creator, operator
+
+
+def _next_followup_at(created_at: datetime, step: int) -> datetime:
+    """Deterministic follow-up timestamp from creation time and the step delay."""
+    return created_at + timedelta(days=STEP_DELAY_DAYS.get(step, 0))
+
+
+def _qualification_int(result: Any, key: str, default: int = 0) -> int:
+    data = result.to_dict() if hasattr(result, "to_dict") else {}
+    value = data.get(key, getattr(result, key, default))
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _campaign_for_creator(db: Session, creator_id: int) -> Campaign | None:
+    """One campaign per creator (the UNIQUE creator_id constraint)."""
+    return db.scalar(select(Campaign).where(Campaign.creator_id == creator_id))
+
+
+def _new_campaign(db: Session, creator: Creator, *, now: datetime | None = None) -> Campaign:
+    created_at = now or utcnow()
+    campaign = Campaign(
+        name="Creator partnerships",
+        niche=creator.niche,
+        creator_id=creator.id,
+        status="active",
+        sequence_status="active",
+        current_step=1,
+        next_followup_at=_next_followup_at(created_at, 1),
+        created_at=created_at,
+    )
+    db.add(campaign)
+    db.flush()
+    return campaign
+
+
 def _settings_values(db: Session) -> dict[str, Any]:
-    stored = {row.key: row.value for row in db.scalars(select(AppSetting)).all()}
+    stored = {row.key: row.value for row in db.scalars(select(Setting)).all()}
     return {**DEFAULT_SETTINGS, **stored}
 
 
@@ -121,11 +191,20 @@ def _settings_payload(db: Session, settings: Settings, whop: WhopClient) -> dict
 
 
 def _upsert_setting(db: Session, key: str, value: Any) -> None:
-    row = db.get(AppSetting, key)
+    # `Setting.key` is unique, not the primary key, so look it up by column.
+    row = db.scalar(select(Setting).where(Setting.key == key))
     if row is None:
-        db.add(AppSetting(key=key, value=value))
+        db.add(Setting(key=key, value=value))
     else:
         row.value = value
+
+
+class CampaignCreateRequest(BaseModel):
+    """Create the single sequence campaign for one creator."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    creator_id: int = Field(gt=0)
 
 
 class ArchitectResearchRequest(BaseModel):
@@ -282,6 +361,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             email=str(payload.email) if payload.email else None,
             ad_posts=payload.ad_posts,
             niche=payload.niche,
+            engagement_rate=getattr(payload, "engagement_rate", None),
+            view_consistency=getattr(payload, "view_consistency", None),
+            unmonetized_score=getattr(payload, "unmonetized_score", None),
+            bio=getattr(payload, "bio", None),
+            post_captions=getattr(payload, "post_captions", None),
         )
         creator = db.scalar(
             select(Creator).where(
@@ -296,10 +380,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 handle=payload.handle,
                 platform=payload.platform,
                 niche=payload.niche,
+                status="New",
             )
             db.add(creator)
 
-        protected_statuses = {"approved", "contacted", "negotiating", "partnered", "suppressed"}
+        protected_statuses = {
+            "approved", "contacted", "negotiating", "partnered", "suppressed",
+            "Contacted", "Replied", "Shortlisted", "Partnered",
+        }
         creator.name = payload.name
         creator.email = str(payload.email) if payload.email else None
         creator.niche = payload.niche
@@ -310,16 +398,31 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         creator.ad_posts = payload.ad_posts
         creator.qualified = result.qualified
         creator.qualification_score = result.score
-        creator.qualification = result.to_dict()
+        qualification = result.to_dict()
+        creator.qualification = qualification
+        creator.engagement_rate = result.engagement_rate
+        creator.monetization_score = _qualification_int(
+            result, "monetization_score", _qualification_int(result, "unmonetized_score")
+        )
+        payload_data = payload.model_dump() if hasattr(payload, "model_dump") else {}
+        top_reels = qualification.get("top_reels", payload_data.get("top_reels"))
+        content_pillars = qualification.get("content_pillars", payload_data.get("content_pillars"))
+        if top_reels is not None:
+            creator.top_reels = top_reels
+        if content_pillars is not None:
+            creator.content_pillars = content_pillars
         if creator.status not in protected_statuses:
-            creator.status = "qualified" if result.qualified else "unqualified"
+            verdict = str(getattr(result, "verdict", "") or "").lower()
+            creator.status = CREATOR_STATUS_BY_VERDICT.get(
+                verdict, "Qualified" if result.qualified else "Rejected"
+            )
 
         db.commit()
         db.refresh(creator)
         return {
             "created": created,
             "creator": creator.to_dict(),
-            "qualification": result.to_dict(),
+            "qualification": qualification,
         }
 
     @api.get("/scout/{creator_id}")
@@ -328,6 +431,45 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if creator is None:
             raise NotFound(f"Creator {creator_id} does not exist.")
         return creator.to_dict()
+
+    # ---- Campaigns --------------------------------------------------------
+    @api.get("/campaigns")
+    def list_campaigns(
+        creator_id: int | None = Query(default=None),
+        db: Session = Depends(get_db),
+    ) -> dict[str, Any]:
+        query = select(Campaign)
+        if creator_id is not None:
+            query = query.where(Campaign.creator_id == creator_id)
+        campaigns = db.scalars(query.order_by(Campaign.created_at.desc())).all()
+        return {"items": [campaign.to_dict() for campaign in campaigns], "count": len(campaigns)}
+
+    @api.post("/campaigns")
+    def create_campaign(
+        payload: CampaignCreateRequest,
+        db: Session = Depends(get_db),
+    ) -> dict[str, Any]:
+        creator = db.get(Creator, payload.creator_id)
+        if creator is None:
+            raise NotFound(f"Creator {payload.creator_id} does not exist.")
+        if _campaign_for_creator(db, creator.id) is not None:
+            raise Conflict(
+                "A campaign already exists for this creator.",
+                code="campaign_exists",
+                details={"creator_id": creator.id},
+            )
+        campaign = _new_campaign(db, creator)
+        try:
+            db.commit()
+        except IntegrityError as exc:
+            db.rollback()
+            raise Conflict(
+                "A campaign already exists for this creator.",
+                code="campaign_exists",
+                details={"creator_id": creator.id},
+            ) from exc
+        db.refresh(campaign)
+        return campaign.to_dict()
 
     # ---- Outreach --------------------------------------------------------
     @api.get("/outreach/templates")
@@ -365,7 +507,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         creator = db.get(Creator, payload.creator_id)
         if creator is None:
             raise NotFound(f"Creator {payload.creator_id} does not exist.")
-        if not creator.qualified and creator.status not in {"approved", "partnered"}:
+        if not creator.qualified and creator.status not in {"approved", "partnered", "Partnered"}:
             raise Conflict(
                 "Outreach requires a qualified creator.",
                 details={"creator_id": creator.id, "qualified": creator.qualified},
@@ -377,13 +519,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             if campaign is None:
                 raise NotFound(f"Campaign {payload.campaign_id} does not exist.")
         else:
-            campaign = db.scalar(select(Campaign).where(Campaign.name == "Creator partnerships"))
+            campaign = _campaign_for_creator(db, creator.id)
             if campaign is None:
-                campaign = Campaign(
-                    name="Creator partnerships", niche=creator.niche, status="active"
-                )
-                db.add(campaign)
-                db.flush()
+                try:
+                    campaign = _new_campaign(db, creator)
+                except IntegrityError as exc:
+                    db.rollback()
+                    raise Conflict(
+                        "A campaign already exists for this creator.",
+                        code="campaign_exists",
+                        details={"creator_id": creator.id},
+                    ) from exc
 
         unsubscribe_url = (
             f"{settings.public_app_url.rstrip('/')}/unsubscribe"
@@ -405,6 +551,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             direction="outbound",
             status="draft",
             template_key=payload.template_key,
+            step=TEMPLATE_STEP.get(payload.template_key, 1),
+            opened=False,
+            replied=False,
             subject=rendered["subject"][:300],
             body=body,
             approved=False,
@@ -452,6 +601,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if email is not None:
             email.classification = detail.label
             email.classification_detail = detail.to_dict()
+            email.replied = True
+            campaign = None
+            if email.campaign_id is not None:
+                campaign = db.get(Campaign, email.campaign_id)
+            if campaign is None and email.creator_id is not None:
+                campaign = _campaign_for_creator(db, email.creator_id)
+            if campaign is not None:
+                campaign.reply_classification = detail.label
+                campaign.sequence_status = REPLY_SEQUENCE_STATUS.get(detail.label, "needs_review")
             saved = True
             db.commit()
             db.refresh(email)
@@ -507,7 +665,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         creator = db.get(Creator, payload.creator_id)
         if creator is None:
             raise NotFound(f"Creator {payload.creator_id} does not exist.")
-        if not creator.qualified and creator.status not in {"approved", "partnered"}:
+        if not creator.qualified and creator.status not in {"approved", "partnered", "Partnered"}:
             raise Conflict(
                 "Products can only be built for qualified or approved creators.",
                 details={"creator_id": creator.id},
@@ -554,6 +712,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise ValidationFailed("Provide a TOC or set generate_toc=true.")
 
         creator_bps, platform_bps = split_bps_for(is_first_product)
+        creator_split, operator_split = _split_mirrors(creator_bps)
         product = Product(
             creator_id=creator.id,
             title=payload.title,
@@ -566,6 +725,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             status="draft",
             toc=toc,
             target_words=payload.target_words,
+            word_count=payload.target_words,
+            branding="hybrid",
+            price=_decimal_cents(payload.price_cents),
+            split_creator=creator_split,
+            split_operator=operator_split,
             creator_approved=False,
         )
         db.add(product)
@@ -593,11 +757,53 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             product.creator_approved = True
             product.approved_by = payload.approved_by
             product.approved_at = utcnow()
-            if product.status == "draft":
-                product.status = "approved"
+            product.status = "creator_approved"
             db.commit()
             db.refresh(product)
         return product.to_dict()
+
+    # ---- Whop publish (Stage 2 status gate) -------------------------------
+    # Sole handler for POST /api/whop/publish. It preserves agent4's approval
+    # gate, production-without-key 503, retry and audit behaviour and adds the
+    # Stage 2 status/whop_url persistence around the same call.
+    @api.post("/whop/publish")
+    def publish_stage2(
+        payload: PublishRequest,
+        db: Session = Depends(get_db),
+        client: WhopClient = Depends(get_whop),
+    ) -> dict[str, Any]:
+        product = db.get(Product, payload.product_id)
+        if product is None:
+            raise NotFound(f"Product {payload.product_id} does not exist.")
+        # agent4's validator raises PublishBlocked with the complete list of
+        # unmet preconditions (creator approval, title, niche, price, TOC).
+        # Reuse it so API callers get the same `details.reasons` contract.
+        validate_publishable(product)
+        if product.status not in {"creator_approved", "live"}:
+            raise PublishBlocked(
+                "A creator_approved product status is required before publishing.",
+                details={
+                    "product_id": product.id,
+                    "creator_approved": bool(product.creator_approved),
+                    "status": product.status,
+                    "reasons": [
+                        "Product status must be creator_approved before publishing."
+                    ],
+                },
+            )
+
+        # agent4 keys its idempotency branch on `live` (and still accepts the
+        # legacy value for pre-migration rows), so a repeat publish makes no
+        # second Whop call and invents no URL.
+        outcome = publish_product(db, product, client)
+        whop = outcome.whop or {}
+        whop_url = whop.get("checkout_url") or whop.get("product_url")
+        if whop_url:
+            product.whop_url = str(whop_url)
+        product.status = "live"
+        db.commit()
+        db.refresh(product)
+        return outcome.to_dict()
 
     # ---- Whop status -----------------------------------------------------
     @api.get("/whop")
@@ -651,7 +857,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         product = db.get(Product, payload.product_id)
         if product is None:
             raise NotFound(f"Product {payload.product_id} does not exist.")
-        if product.status != "published":
+        if product.status not in {"live", "published"}:
             raise Conflict(
                 "Sales can only be recorded for a published product.",
                 code="product_not_published",
@@ -664,6 +870,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             product_id=product.id,
             creator_id=product.creator_id,
             whop_sale_id=payload.whop_sale_id,
+            whop_order_id=payload.whop_sale_id,
             currency=payload.currency.lower(),
             gross_cents=payload.gross_cents,
             refunded_cents=0,
@@ -672,7 +879,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             platform_cents=payout["platform_cents"],
             creator_share_bps=creator_bps,
             platform_share_bps=platform_bps,
+            amount=_decimal_cents(payload.gross_cents),
+            payout_creator=_decimal_cents(payout["creator_cents"]),
+            payout_operator=_decimal_cents(payout["platform_cents"]),
             status="paid",
+            sold_at=utcnow(),
         )
         db.add(sale)
         db.commit()
@@ -697,6 +908,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         sale.net_cents = payout["net_cents"]
         sale.creator_cents = payout["creator_cents"]
         sale.platform_cents = payout["platform_cents"]
+        sale.amount = _decimal_cents(sale.gross_cents)
+        sale.payout_creator = _decimal_cents(sale.creator_cents)
+        sale.payout_operator = _decimal_cents(sale.platform_cents)
         sale.status = (
             "refunded"
             if payload.refunded_cents == sale.gross_cents
@@ -763,7 +977,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise ValidationFailed(str(exc)) from exc
 
     @api.post("/architect/draft")
-    def architect_draft(payload: dict[str, Any]) -> dict[str, Any]:
+    def architect_draft(
+        payload: dict[str, Any], db: Session = Depends(get_db)
+    ) -> dict[str, Any]:
         try:
             analysis = analyze_research(_architect_input(payload))
             generated = generate_concepts(analysis)
@@ -777,6 +993,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise
         except (TypeError, ValueError) as exc:
             raise ValidationFailed(str(exc)) from exc
+
+        product_id = payload.get("product_id")
+        if product_id is not None:
+            product = db.get(Product, int(product_id))
+            if product is None:
+                raise NotFound(f"Product {product_id} does not exist.")
+            if draft.get("actual_word_count") is not None:
+                product.word_count = int(draft["actual_word_count"])
+            if draft.get("markdown"):
+                product.content_md = str(draft["markdown"])
+            db.commit()
+            db.refresh(product)
         return {
             "draft": draft,
             "valid": True,

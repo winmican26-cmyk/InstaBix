@@ -78,7 +78,7 @@ def test_mock_publish_succeeds_after_approval(
     assert body["whop"]["whop_product_id"].startswith("prod_mock_")
 
     stored = client.get(f"/api/products/{product['id']}").json()
-    assert stored["status"] == "published"
+    assert stored["status"] == "live"
     assert stored["published_at"] is not None
     assert stored["whop_product_id"] == body["whop"]["whop_product_id"]
     assert stored["whop_plan_id"] == body["whop"]["whop_plan_id"]
@@ -193,7 +193,7 @@ def test_production_without_key_is_disabled_and_publish_fails_closed(
         assert detail["code"] == "whop_not_configured"
 
         stored = client.get(f"/api/products/{product['id']}").json()
-        assert stored["status"] == "approved"
+        assert stored["status"] == "creator_approved"
         assert stored["whop_product_id"] is None
         assert stored["bio_link"] is None
         assert stored["published_at"] is None
