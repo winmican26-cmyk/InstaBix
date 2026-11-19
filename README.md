@@ -215,7 +215,7 @@ Gates on 2026-11-19: backend `156 passed` with clean `compileall`; root `npm run
 - No Whop sandbox publish: sandbox key required.
 - No Playwright E2E, Lighthouse budgets, load test, backup/restore drill, security review, or App Review recording.
 - Root surfaces compile and pass unit tests but were not runtime-reverified against populated real rows in the documented session.
-- Git working tree was uncommitted on `main` with no remote at the time of documentation; it has since been committed as `9d74ad8` and pushed to `origin/main`.
+- Stage 1 was pushed as `43d75e9`; Stage 2 was pushed as `03a8512`. Local `main` and `origin/main` match and the working tree is clean.
 
 ## 9. Documentation index
 
