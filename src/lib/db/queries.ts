@@ -4,10 +4,13 @@ import { withOrg } from "@/lib/db";
 import {
   agreements,
   auditEvents,
+  buyerObjections,
+  buyerPanelRuns,
   campaigns,
   chapters,
   creatorAccounts,
   creatorSnapshots,
+  demandGaps,
   drafts,
   integrations,
   invites,
@@ -22,6 +25,7 @@ import {
   sequences,
   statements,
   users,
+  voiceDnas,
 } from "@/lib/db/schema";
 
 export async function getDashboard(orgId: string) {
@@ -198,14 +202,51 @@ export async function getProductDetail(orgId: string, productId: string) {
       .limit(1);
     if (!row) return null;
 
-    const [chapterRows, draftRows, agreementRows, orderRows] = await Promise.all([
+    const [chapterRows, draftRows, agreementRows, orderRows, gapRows, voiceRows, panelRows] = await Promise.all([
       tx.select().from(chapters).where(eq(chapters.productId, productId)).orderBy(asc(chapters.position)),
       tx.select().from(drafts).where(eq(drafts.productId, productId)).orderBy(desc(drafts.createdAt)).limit(3),
       tx.select().from(agreements).where(eq(agreements.productId, productId)).orderBy(desc(agreements.createdAt)).limit(3),
       tx.select().from(orders).where(eq(orders.productId, productId)).orderBy(desc(orders.createdAt)).limit(10),
+      tx
+        .select()
+        .from(demandGaps)
+        .where(and(eq(demandGaps.orgId, orgId), eq(demandGaps.creatorId, row.creator.id)))
+        .orderBy(asc(demandGaps.rank))
+        .limit(3),
+      tx
+        .select()
+        .from(voiceDnas)
+        .where(and(eq(voiceDnas.orgId, orgId), eq(voiceDnas.creatorId, row.creator.id)))
+        .limit(1),
+      tx
+        .select()
+        .from(buyerPanelRuns)
+        .where(and(eq(buyerPanelRuns.orgId, orgId), eq(buyerPanelRuns.productId, productId)))
+        .orderBy(desc(buyerPanelRuns.createdAt))
+        .limit(1),
     ]);
 
-    return { ...row, chapters: chapterRows, drafts: draftRows, agreements: agreementRows, orders: orderRows };
+    const [panel] = panelRows;
+    const objections = panel
+      ? await tx
+          .select()
+          .from(buyerObjections)
+          .where(and(eq(buyerObjections.orgId, orgId), eq(buyerObjections.runId, panel.id)))
+          .orderBy(asc(buyerObjections.createdAt))
+      : [];
+
+    return {
+      ...row,
+      chapters: chapterRows,
+      drafts: draftRows,
+      agreements: agreementRows,
+      orders: orderRows,
+      analysis: {
+        gaps: gapRows,
+        voiceDna: voiceRows[0] ?? null,
+        panel: panel ? { ...panel, objections } : null,
+      },
+    };
   });
 }
 

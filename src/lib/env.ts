@@ -23,6 +23,7 @@ const schema = z.object({
   META_WEBHOOK_VERIFY_TOKEN: optionalString,
   META_DISCOVERY_TOKEN: optionalString,
   META_DISCOVERY_IG_USER_ID: optionalString,
+  META_SCOPES: optionalString,
   GRAPH_VERSION: z.string().default("v23.0"),
 
   RESEND_API_KEY: optionalString,

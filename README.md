@@ -50,7 +50,7 @@ Open `http://localhost:3000`.
 ## 2. Postgres, Drizzle, and RLS
 
 - Root stack: Drizzle `0.45.4` with `pg`.
-- Schema: 33 tables in `src/lib/db/schema.ts`.
+- Schema: 37 tables in `src/lib/db/schema.ts` (33 original plus four Studio intelligence tables added by `drizzle/0006_studio_intelligence.sql`).
 - Migrations: `drizzle/0000` through `drizzle/0005` (0005 adds the creator-registration verification state and login link).
 - `DATABASE_URL` is the application role and must not be a superuser in production.
 - `DATABASE_URL_ADMIN` is for migration/seed ownership only.

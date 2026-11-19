@@ -74,7 +74,7 @@ export function authorizeUrl(state: string, scopes = "instagram_business_basic")
   url.searchParams.set("client_id", env.META_APP_ID);
   url.searchParams.set("redirect_uri", redirectUri);
   url.searchParams.set("response_type", "code");
-  url.searchParams.set("scope", process.env.META_SCOPES ?? scopes);
+  url.searchParams.set("scope", env.META_SCOPES ?? scopes);
   url.searchParams.set("state", state);
   return url.toString();
 }

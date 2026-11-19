@@ -14,6 +14,13 @@ import {
 import { requireWorkspace } from "@/lib/auth/session";
 import { getProductDetail } from "@/lib/db/queries";
 import { approveOutlineAction, generateOutlineAction, publishProductAction, submitForCreatorReviewAction } from "@/lib/actions/studio";
+import {
+  generateDemandGapsAction,
+  generateVoiceDnaAction,
+  lockVoiceDnaAction,
+  runBuyerPanelAction,
+  setBuyerObjectionStatusAction,
+} from "@/lib/actions/analysis";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +29,8 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Alert } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import { ActionButton } from "@/components/app/action-button";
+import { checkVoiceText } from "@/lib/analysis/voice";
+import { aiConfigured } from "@/lib/env";
 import { ChapterList } from "./chapter-list";
 import { AddChapterForm } from "./add-chapter";
 import { DeleteProductButton } from "./delete-product";
@@ -48,11 +57,20 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   const data = await getProductDetail(org.id, id);
   if (!data) notFound();
 
-  const { product, creator, chapters, drafts, agreements, orders } = data;
+  const { product, creator, chapters, drafts, agreements, orders, analysis } = data;
+  const { gaps, voiceDna, panel } = analysis;
   const written = chapters.filter((c) => (c.content ?? "").trim().length > 0);
   const totalWords = written.reduce((sum, c) => sum + c.wordCount, 0);
   const stage = stageIndex(product.status);
   const canManage = role === "owner" || role === "admin";
+  const voiceCheck = voiceDna
+    ? checkVoiceText(
+        written
+          .map((chapter) => [chapter.title, chapter.summary, chapter.content].filter(Boolean).join(" "))
+          .join(" "),
+        voiceDna,
+      )
+    : null;
 
   return (
     <div className="space-y-6">
@@ -308,6 +326,245 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
         ) : null}
       </Card>
 
+      <section className="space-y-4" aria-labelledby="studio-analysis-heading">
+        <div>
+          <h2 id="studio-analysis-heading" className="font-display text-lg font-semibold text-fg">
+            Analysis, for humans to judge
+          </h2>
+          <p className="mt-1 text-[12px] leading-5 text-muted">
+            Every figure here is read from stored records. Proposals stay proposals until a person reviews them.
+          </p>
+        </div>
+
+        {!aiConfigured ? (
+          <Alert tone="warning" title="AI analysis is disabled">
+            Add ANTHROPIC_API_KEY to configure AI. Until then, generation is refused and no analysis is fabricated on this
+            page.
+          </Alert>
+        ) : null}
+
+        <div className="grid gap-4 lg:grid-cols-3">
+          <Card>
+            <CardHeader>
+              <div>
+                <CardTitle>Demand Gaps</CardTitle>
+                <CardDescription>
+                  Proposals derived only from stored real captions and in-workspace product titles.
+                </CardDescription>
+              </div>
+              <ActionButton
+                action={generateDemandGapsAction.bind(null, creator.id)}
+                variant="secondary"
+                size="sm"
+                confirm="Generate demand gaps? This replaces the current list. Only stored captions and product titles are read."
+                disabled={!aiConfigured}
+              >
+                <Sparkles /> Generate gaps
+              </ActionButton>
+            </CardHeader>
+            <CardContent>
+              {gaps.length === 0 ? (
+                <EmptyState
+                  icon={Sparkles}
+                  title="No demand gaps yet"
+                  description="Nothing has been generated for this creator. Generation reads stored captions and product titles only."
+                />
+              ) : (
+                <ol className="space-y-3">
+                  {gaps.map((gap) => {
+                    const score = `${Math.round(gap.scoreBps / 100)} / 100`;
+                    return (
+                      <li key={gap.id} className="rounded-lg border border-line bg-surface-2/40 p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-[12.5px] font-semibold leading-5 text-fg">
+                            <span className="mr-1.5 font-mono text-[11px] text-faint">#{gap.rank}</span>
+                            {gap.theme}
+                          </p>
+                          <Badge tone="neutral">{score}</Badge>
+                        </div>
+                        <p className="mt-1 text-[11.5px] leading-4 text-muted">{gap.productConcept}</p>
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          <Badge tone="lime">{gap.strength}</Badge>
+                          <Badge tone="neutral">{gap.requestCount} requests</Badge>
+                          <Badge tone="neutral">{gap.buyerLanguageHits} buyer-language hits</Badge>
+                          <Badge tone="neutral">{gap.existingProductMatches} existing matches</Badge>
+                        </div>
+                        {gap.examplePhrasing ? (
+                          <p className="mt-2 flex items-start gap-1.5 text-[11px] leading-4 text-faint">
+                            <Quote className="mt-0.5 size-3 shrink-0 text-lime" aria-hidden />
+                            {gap.examplePhrasing}
+                          </p>
+                        ) : null}
+                        <p className="mt-2 text-[10px] leading-4 text-faint">
+                          Provenance: {gap.captionsUsed} captions · {gap.model}
+                        </p>
+                      </li>
+                    );
+                  })}
+                </ol>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <div>
+                <CardTitle>Voice DNA</CardTitle>
+                <CardDescription>Extracted from stored captions. Only a person can lock it.</CardDescription>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <ActionButton
+                  action={generateVoiceDnaAction.bind(null, creator.id)}
+                  variant="secondary"
+                  size="sm"
+                  confirm="Extract Voice DNA? This replaces the current profile and clears its lock."
+                  disabled={!aiConfigured}
+                >
+                  <Sparkles /> Extract voice
+                </ActionButton>
+                <ActionButton
+                  action={lockVoiceDnaAction.bind(null, creator.id)}
+                  size="sm"
+                  confirm="Lock this Voice DNA profile? Locking is a human decision and is recorded in the audit log."
+                  disabled={!voiceDna}
+                >
+                  <BadgeCheck /> Lock voice
+                </ActionButton>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {!voiceDna ? (
+                <EmptyState
+                  icon={Quote}
+                  title="No Voice DNA profile"
+                  description="Extract it from stored captions, review it, then lock it before running a buyer panel."
+                />
+              ) : (
+                <>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <Badge tone={voiceDna.lockedAt ? "lime" : "amber"}>
+                      {voiceDna.lockedAt ? "locked" : "not locked"}
+                    </Badge>
+                    {voiceDna.tone.map((tone, index) => (
+                      <Badge key={`tone-${index}`} tone="violet">
+                        {tone}
+                      </Badge>
+                    ))}
+                  </div>
+                  <TextList label="Top phrases" items={voiceDna.topPhrases} />
+                  <TextList label="Signature stories" items={voiceDna.signatureStories} />
+                  <TextList label="Never says" items={voiceDna.neverSays} />
+                  {voiceCheck ? (
+                    <div className="rounded-md border border-line bg-surface-2/40 p-3">
+                      <p className="flex items-center gap-1.5 text-[12px] font-semibold text-fg">
+                        <BadgeCheck
+                          className={voiceCheck.passed ? "size-3.5 text-lime" : "size-3.5 text-amber"}
+                          aria-hidden
+                        />
+                        {voiceCheck.passed ? "Voice check passed" : "Voice check blocked"}
+                      </p>
+                      {written.length === 0 ? (
+                        <p className="mt-1 text-[11px] leading-4 text-faint">
+                          No written chapters yet, so there was no text to compare against the profile.
+                        </p>
+                      ) : null}
+                      {voiceCheck.banned.length > 0 ? (
+                        <div className="mt-1.5">
+                          <p className="text-[11px] leading-4 text-muted">
+                            Banned phrases found in written titles, summaries or content:
+                          </p>
+                          <ul className="mt-1 flex flex-wrap gap-1.5">
+                            {voiceCheck.banned.map((phrase, index) => (
+                              <li key={`banned-${index}`}>
+                                <Badge tone="danger">{phrase}</Badge>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  <p className="text-[10px] leading-4 text-faint">
+                    Provenance: {voiceDna.captionsUsed} captions · {voiceDna.model}
+                  </p>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <div>
+                <CardTitle>Test Buyer Panel</CardTitle>
+                <CardDescription>Objections are proposals for review. Nothing here publishes automatically.</CardDescription>
+              </div>
+              <ActionButton
+                action={runBuyerPanelAction.bind(null, product.id)}
+                variant="secondary"
+                size="sm"
+                confirm="Run a new buyer panel? This creates a new run for human review."
+                disabled={!aiConfigured || !voiceDna?.lockedAt}
+              >
+                <Sparkles /> Run buyer panel
+              </ActionButton>
+            </CardHeader>
+            <CardContent>
+              {!panel ? (
+                <EmptyState
+                  icon={Quote}
+                  title="No buyer panel run"
+                  description="A run requires locked Voice DNA and stored chapters. Nothing is generated until both are present."
+                />
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-[10px] leading-4 text-faint">
+                    Latest run · {panel.objectionsCount} recorded · {panel.model} · {formatDateTime(panel.createdAt)}
+                  </p>
+                  {panel.objections.length === 0 ? (
+                    <p className="text-[12px] leading-5 text-faint">No objections were recorded in this run.</p>
+                  ) : (
+                    <ul className="space-y-3">
+                      {panel.objections.map((objection) => (
+                        <li key={objection.id} className="rounded-lg border border-line bg-surface-2/40 p-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-[12.5px] font-semibold leading-5 text-fg">{objection.persona}</p>
+                            <Badge
+                              tone={
+                                objection.status === "fixed"
+                                  ? "lime"
+                                  : objection.status === "dismissed"
+                                    ? "neutral"
+                                    : "amber"
+                              }
+                            >
+                              {objection.status}
+                            </Badge>
+                          </div>
+                          <p className="mt-1 text-[11.5px] leading-4 text-muted">{objection.objection}</p>
+                          <p className="mt-1 text-[11.5px] leading-4 text-faint">Fix: {objection.fix}</p>
+                          {objection.status === "open" ? (
+                            <div className="mt-2">
+                              <ActionButton
+                                action={setBuyerObjectionStatusAction.bind(null, objection.id, "fixed")}
+                                variant="outline"
+                                size="sm"
+                                confirm="Mark this objection fixed? This is a human review decision and is audited."
+                              >
+                                <BadgeCheck /> Mark fixed
+                              </ActionButton>
+                            </div>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </section>
+
       <p className="text-[11px] leading-5 text-faint">
         Words are counted on save. Order counts are read from <span className="font-mono">orders</span>. Nothing on this page
         is a placeholder.
@@ -342,6 +599,26 @@ function Gate({ done, title, body }: { done: boolean; title: string; body: strin
         <p className="text-[12px] font-medium text-fg">{title}</p>
         <p className="mt-0.5 text-[11px] leading-4 text-faint">{body}</p>
       </div>
+    </div>
+  );
+}
+
+function TextList({ label, items }: { label: string; items: string[] }) {
+  return (
+    <div>
+      <p className="label">{label}</p>
+      {items.length === 0 ? (
+        <p className="mt-1 text-[11px] leading-4 text-faint">None recorded.</p>
+      ) : (
+        <ul className="mt-1 space-y-1">
+          {items.map((item, index) => (
+            <li key={`${label}-${index}`} className="flex items-start gap-1.5 text-[11.5px] leading-4 text-muted">
+              <Quote className="mt-0.5 size-3 shrink-0 text-lime" aria-hidden />
+              {item}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

@@ -572,3 +572,120 @@ legacy-brand audit  derived_pattern_length=12; shipped_scope_files=231; forbidde
 ```
 
 `git status --short` shows only `DECISIONS.md`, `EVIDENCE.md`, `README.md` and `TRACEABILITY.md` modified. No file under `src/`, `backend/`, `frontend/`, `postman/`, `drizzle/` or `tests/` changed. No real credentials or live provider calls were used.
+
+## 15. Final wiring and E2E verification (2026-11-19)
+
+This closes the user's final request: click every visible control, then finish with repeatable E2E tests. No provider credentials were added; the missing credential nodes in `.env.local` remain intentionally empty for later completion.
+
+### 15.1 Runtime restoration
+
+- Docker Desktop was restarted; `instabix-postgres` was started on `0.0.0.0:55432->5432/tcp` and reconnected with the app role (34 public tables).
+- Backend: `uvicorn app.main:app --host 127.0.0.1 --port 8000`; `GET /health` returned HTTP 200 with `database:"ok"`, `whop.mode:"mock"`, `configured:false`.
+- Root app: `npm run dev`; `GET /api/health` returned HTTP 200 with `database:"reachable"`.
+- Login rate-limit rows were cleared before each E2E run so the single global login would not inherit earlier failed attempts.
+
+### 15.2 E2E suite
+
+```text
+npm run e2e
+Running 18 tests using 1 worker
+1 skipped (opt-in configured-env spec)
+17 passed (2.5m)
+```
+
+Scope and result:
+
+- Public routes `/`, `/how-it-works`, `/for-creators`, `/apply`, `/creator/signup`, `/login`, `/legal/privacy`, `/legal/terms`: 7-18 visible controls clicked per route.
+- Authenticated routes `/dashboard`, `/creators`, `/outreach`, `/studio`, `/revenue`, `/integrations`, `/audit`, `/settings`: 16-29 visible controls clicked per route.
+- Selector: `button:visible, a:visible:not([href="#main"]), select:visible, input:visible`. This covers document-level sidebar, topbar, header and footer controls; the off-screen accessibility skip link is excluded because it is not clickable until focused.
+- Every test asserted `expect(errors, ...).toEqual([])` for `pageerror` and console errors; no page errors were reported.
+- Credential-gated API checks returned 503 for `/api/integrations/instagram/start`, `/api/checkout` and `/api/webhooks/instagram`; `/api/health` returned 200 with `database:"reachable"`.
+
+An earlier independent judge found that the original `<main>`-scoped selector missed document-level controls. The selector was broadened as above and the full suite re-run green. Global setup was also made more deterministic by clicking the hydrated Sign in button rather than calling `requestSubmit()` inside `locator.evaluate()`, which could destroy the execution context on navigation. The judge's bounded re-review returned **ACCEPT**: the selector is a strict superset of the old one, the sole exclusion is the only `href="#main"` link (the intentionally off-screen skip link), no `role="button"`, `contenteditable` or used `Textarea` falls outside the selected tag types, and `/login` has exactly one matching Sign in submit control.
+
+The opt-in inverse check `EXPECT_CONFIGURED=1 npx playwright test e2e/env-configured.spec.ts` passed earlier (`1 passed`, `4.3s`) against a temporary server supplied with fake values only as process env. It remained skipped in the final suite by design; `.env.local` was never populated with fake or real provider credentials.
+
+### 15.3 Final deterministic gates
+
+```text
+npm run verify
+  typecheck: clean
+  lint:      clean
+  test:      7 files / 76 tests passed
+  build:     compiled successfully; 11/11 static pages generated
+
+backend pytest (full suite): 188 passed, 1 known Starlette/httpx deprecation warning
+git diff --check: clean (only Git's LF-to-CRLF normalization warnings on four edited TS files)
+legacy-brand audit: 0 hits in 236 tracked/new files and 1,925 built files
+```
+
+No seeded demo rows, fabricated URLs, products or metrics were introduced. Integer cents and basis points remain authoritative; splits remain server-derived from the stored ordinal; approval, consent, suppression and fail-closed behavior were preserved.
+
+## 16. Studio intelligence slice — Demand Gaps, Voice DNA, Buyer Panel (2026-11-19)
+
+This closes the follow-up request to implement the genuinely additive V2.2 concepts: Demand Gap scoring, a locked Voice DNA profile, and an AI Test Buyer Panel. Duplicates were deliberately not rebuilt: qualification scoring, outreach, studio drafting, splits, ledger, audit, tenancy, roles, settings and the design system were left unchanged.
+
+### 16.1 Atom register
+
+| Atom | Goal | Success criteria | Risk | Generator verdict | Judge verdict |
+| --- | --- | --- | --- | --- | --- |
+| `SCHEMA-INTEL` | Add four org-scoped intelligence tables and RLS migration | Schema/migration column parity; forced RLS policy on all four; no seed rows | M | **PASS** — typecheck clean; migration reviewed | **ACCEPT** |
+| `PURE-INTEL` | Deterministic scoring and validation helpers | 35 literal unit tests; no DB/SDK/Next imports | L | **PASS** — 35/35 tests green | **ACCEPT** |
+| `AI-INTEL` | Three credential-gated Anthropic adapters | `aiConfigured` guard first; zod `safeParse`; bounded inputs; typed failure results | M | **PASS** — typecheck/lint clean | **ACCEPT** |
+| `ACTIONS-INTEL` | Server actions, gates, loader | Auth + role + org transaction + audit + revalidate on every write; review gate server-side | M | **PASS** — 115/115 full unit suite green | **ACCEPT** |
+| `UI-INTEL` | Three honest Studio panels | Stored values only; disabled states; no auto-publish; build green | M | **PASS** — typecheck/lint/build clean | **ACCEPT** |
+
+### 16.2 Implementation boundaries
+
+- Four new tables in `src/lib/db/schema.ts`: `demand_gaps`, `voice_dnas`, `buyer_panel_runs`, `buyer_objections` (root app now has 37 tables).
+- `drizzle/0006_studio_intelligence.sql`: hand-authored additive migration. All four tables enable and force RLS and receive the same `tenant_isolation` policy as `0001_rls_and_grants.sql`. No journal/snapshot rewrite, no seed rows.
+- Pure modules in `src/lib/analysis/`: demand scoring uses integer basis points with 4000/3000/3000 weights for request volume, buyer language and in-workspace competition; voice checks are normalized verbatim substring checks; buyer drafts must be 3–5 distinct personas with concrete fixes.
+- `src/lib/ai/analysis.ts`: three server-only adapters using `env.AI_MODEL`, zod-validated JSON, bounded material and `{ ok: false }` failure returns. No API key was used; no live provider call was made.
+- `src/lib/actions/analysis.ts`: five actions. Generation fails closed before any DB read; Voice DNA phrases must be grounded in real captions; regeneration clears the lock; the buyer panel requires a locked Voice DNA profile. Every successful write is audited.
+- `src/lib/actions/studio.ts`: `submitForCreatorReviewAction` now blocks when a locked Voice DNA profile detects banned phrasing or when any buyer objection is still open. The check runs inside the transaction; no client flag can bypass it.
+- `src/app/(app)/studio/[id]/page.tsx`: three stored-data panels with honest empty/disabled states and no publish automation.
+
+### 16.3 Deterministic gates
+
+```text
+npm run verify
+  typecheck: clean
+  lint:      clean
+  test:      11 files / 115 tests passed
+  build:     compiled successfully; 11/11 static pages generated; /studio/[id] dynamic
+
+npm run db:migrate
+  → 0006_studio_intelligence.sql … applied
+  Applied 1 migration(s).
+
+Postgres read-only verification
+  schema_migrations: 0006_studio_intelligence.sql present
+  pg_class:  demand_gaps / voice_dnas / buyer_panel_runs / buyer_objections
+             relrowsecurity=true, relforcerowsecurity=true
+  pg_policies: tenant_isolation present on all four tables
+
+npm run e2e
+  Running 18 tests using 1 worker
+  17 passed, 1 skipped (opt-in configured-env spec)
+
+git diff --check: only Git LF-to-CRLF normalization warnings; no real whitespace errors
+legacy-brand audit (judge): derived_pattern_length=12; 24 changed/new files scanned; forbidden_hits=0
+```
+
+The local migration was applied only after an explicit human approval gate. No production data was changed. `backend/**`, `frontend/**`, splits, ledger, branding, consent and outreach policy were untouched.
+
+### 16.4 Independent judge verdict
+
+**ACCEPT.** The independent read-only verifier checked schema/migration column parity, forced RLS and policies, fail-closed ordering in all adapters and actions, org scoping and audit calls, the server-side review gate, UI honesty, branding and untouched surfaces. It confirmed 35 new pure tests and zero forbidden-brand hits.
+
+Residual observations, none blocking acceptance:
+
+1. `evidenceIndexes` are bounded to the adapter's 12-caption maximum; if fewer captions are supplied, out-of-range indexes are discarded by the action before persistence, so no invalid evidence id is saved.
+2. The buyer-panel lock check and its later write use separate transactions; a concurrent regeneration could race, but the same role gate limits impact.
+3. `countBuyerLanguage` uses a fixed English phrase list; other languages score lower without being fabricated.
+4. AI adapters and DB actions have no mocked behavioral tests; invariants are covered by pure tests and source-text regression guards.
+5. Code and migration 0006 must ship together because `getProductDetail` and the submit gate now query the new tables unconditionally.
+
+### 16.5 Human gate
+
+The user explicitly approved applying migration `0006_studio_intelligence.sql` to the local Postgres before runtime/E2E verification. No commit or deployment was performed.

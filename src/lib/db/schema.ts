@@ -666,6 +666,109 @@ export const agreements = pgTable(
   (t) => [index("agreements_creator_idx").on(t.creatorId)],
 );
 
+/* ───────────────────────────── studio intelligence ───────────────────────────── */
+
+export const demandGaps = pgTable(
+  "demand_gaps",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    creatorId: uuid("creator_id")
+      .notNull()
+      .references(() => creatorAccounts.id, { onDelete: "cascade" }),
+    productId: uuid("product_id").references(() => products.id, { onDelete: "set null" }),
+    theme: text("theme").notNull(),
+    rank: integer("rank").notNull(),
+    requestCount: integer("request_count").notNull(),
+    buyerLanguageHits: integer("buyer_language_hits").notNull(),
+    existingProductMatches: integer("existing_product_matches").notNull(),
+    scoreBps: integer("score_bps").notNull(),
+    strength: text("strength").notNull(),
+    examplePhrasing: text("example_phrasing"),
+    productConcept: text("product_concept").notNull(),
+    evidenceCaptionIds: text("evidence_caption_ids").array().default([]).notNull(),
+    model: text("model").notNull(),
+    captionsUsed: integer("captions_used").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("demand_gaps_org_creator_idx").on(t.orgId, t.creatorId, t.createdAt),
+    index("demand_gaps_product_idx").on(t.productId),
+  ],
+);
+
+export const voiceDnas = pgTable(
+  "voice_dnas",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    creatorId: uuid("creator_id")
+      .notNull()
+      .references(() => creatorAccounts.id, { onDelete: "cascade" }),
+    tone: text("tone").array().notNull(),
+    topPhrases: text("top_phrases").array().notNull(),
+    signatureStories: text("signature_stories").array().notNull(),
+    neverSays: text("never_says").array().notNull(),
+    captionsUsed: integer("captions_used").notNull(),
+    model: text("model").notNull(),
+    lockedAt: timestamp("locked_at", { withTimezone: true }),
+    lockedBy: uuid("locked_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("voice_dnas_org_creator_idx").on(t.orgId, t.creatorId),
+    index("voice_dnas_creator_idx").on(t.creatorId),
+  ],
+);
+
+export const buyerPanelRuns = pgTable(
+  "buyer_panel_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    model: text("model").notNull(),
+    objectionsCount: integer("objections_count").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("buyer_panel_runs_org_product_idx").on(t.orgId, t.productId, t.createdAt)],
+);
+
+export const buyerObjections = pgTable(
+  "buyer_objections",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => buyerPanelRuns.id, { onDelete: "cascade" }),
+    persona: text("persona").notNull(),
+    objection: text("objection").notNull(),
+    fix: text("fix").notNull(),
+    status: text("status").notNull().default("open"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("buyer_objections_run_idx").on(t.runId),
+    index("buyer_objections_org_product_status_idx").on(t.orgId, t.productId, t.status),
+  ],
+);
+
 /* ───────────────────────────── commerce ───────────────────────────── */
 
 export const orders = pgTable(
@@ -761,3 +864,7 @@ export type Product = typeof products.$inferSelect;
 export type Message = typeof messages.$inferSelect;
 export type Order = typeof orders.$inferSelect;
 export type LedgerEntry = typeof ledgerEntries.$inferSelect;
+export type DemandGap = typeof demandGaps.$inferSelect;
+export type VoiceDna = typeof voiceDnas.$inferSelect;
+export type BuyerPanelRun = typeof buyerPanelRuns.$inferSelect;
+export type BuyerObjection = typeof buyerObjections.$inferSelect;

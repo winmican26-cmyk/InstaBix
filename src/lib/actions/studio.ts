@@ -5,8 +5,9 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { z } from "zod";
 import { withOrg } from "@/lib/db";
-import { agreements, chapters, citations, creatorAccounts, drafts, media, products } from "@/lib/db/schema";
+import { agreements, buyerObjections, chapters, citations, creatorAccounts, drafts, media, products, voiceDnas } from "@/lib/db/schema";
 import { requireWorkspace, canReview } from "@/lib/auth/session";
+import { checkVoiceText } from "@/lib/analysis/voice";
 import { insertAudit } from "@/lib/audit";
 import { generateOutline } from "@/lib/ai/studio";
 import { aiConfigured } from "@/lib/env";
@@ -352,6 +353,36 @@ export async function submitForCreatorReviewAction(productId: string): Promise<S
       return { error: `Every chapter needs content before review. ${written.length} of ${chapterRows.length} written.` } as const;
     }
     if (written.length < 8) return { error: "At least 8 written chapters are required." } as const;
+
+    const [voice] = await tx
+      .select()
+      .from(voiceDnas)
+      .where(and(eq(voiceDnas.orgId, org.id), eq(voiceDnas.creatorId, product.creatorId)))
+      .limit(1);
+    if (voice?.lockedAt) {
+      const draftText = written
+        .map((c) => `${c.title}\n${c.summary ?? ""}\n${c.content ?? ""}`)
+        .join("\n");
+      const voiceCheck = checkVoiceText(draftText, voice);
+      if (!voiceCheck.passed) {
+        return { error: "Voice check failed. Remove banned phrasing: " + voiceCheck.banned.join(", ") } as const;
+      }
+    }
+
+    const [openObjections] = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(buyerObjections)
+      .where(
+        and(
+          eq(buyerObjections.orgId, org.id),
+          eq(buyerObjections.productId, productId),
+          eq(buyerObjections.status, "open"),
+        ),
+      );
+    const openCount = openObjections?.count ?? 0;
+    if (openCount > 0) {
+      return { error: `Resolve ${openCount} open buyer objection(s) before creator review.` } as const;
+    }
 
     const totalWords = written.reduce((sum, c) => sum + c.wordCount, 0);
 
