@@ -432,3 +432,29 @@ Empty credential nodes were prepared ahead of real values. No credential value w
 `src/lib/env.ts` Zod probe before the fix: `empty: false`, `absent: true`, `value: true` — an empty node would have broken boot. The optional-string preprocessor now maps empty/whitespace-only values to `undefined`. `tests/env.test.ts` (3 tests) proves empty and whitespace values are unset while a real value is configured.
 
 Gates re-run after the change: root `npm run verify` passed (`55 tests` in 6 files, production build with `.env.local` loaded); frontend typecheck and production build clean; backend `177 passed`, `COMPILEALL_EXIT=0`. No provider is enabled by a placeholder.
+
+## 10. Reference starter structure reconciliation (2026-11-19)
+
+D18 in `DECISIONS.md` records the interpretation. The pasted blocks 5–6 were treated as legacy reference, not as a patch to copy.
+
+| Reference item | Shipped state | Action |
+| --- | --- | --- |
+| `README.md`, `frontend/package.json`, `frontend/app/page.tsx` | Present | None |
+| `backend/requirements.txt` | Present with newer pins; no `alembic`/`python-dotenv` needed | Not downgraded |
+| `backend/.env.example` | Present with all production settings and safety rails | Kept; credential nodes added in section 9 |
+| `backend/migrations/001_initial.sql` | `backend/migrations/0001_stage2.sql` is already the full six-table DDL | No duplicate created |
+| `backend/app/{main,models,schemas,whop}.py`, `agents/agent1-4.py` | Present and production-grade; reference snippets are toy versions | Not replaced |
+| `routers/{scout,outreach,products,revenue,settings}.py` | Routes live in the single accepted `main.py` registration point; `routers/whop.py` holds the audit endpoint | Deferred as a no-op refactor |
+| `postman/` collection, environment, README | Missing | **Added** as InstaBix-branded files |
+
+Validation:
+
+```text
+collection requests = 13 ; unique = 13
+MISSING = [] ; EXTRA = []
+ENV_VARS = apiKey, baseUrl, creatorId, niche, productId, productNumericId
+COLLECTION_VALID = True
+legacy-brand hits in postman/ = 0
+```
+
+The collection encodes the locked rules in request descriptions: drafts are never auto-sent, `is_first_product` is accepted but never trusted for splits, the webhook is a 501 stub, and no secrets belong in Postman.

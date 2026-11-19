@@ -1,0 +1,210 @@
+{
+  "info": {
+    "name": "InstaBix API",
+    "description": "Stage 1-3 FastAPI surface at http://localhost:8000. All writes preserve human approval gates; drafts are never auto-sent. The Whop webhook is an intentional 501 (Next) stub.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      { "key": "key", "value": "X-API-Key", "type": "string" },
+      { "key": "value", "value": "{{apiKey}}", "type": "string" },
+      { "key": "in", "value": "header", "type": "string" }
+    ]
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8000" },
+    { "key": "apiKey", "value": "" },
+    { "key": "creatorId", "value": "1" },
+    { "key": "productNumericId", "value": "1" },
+    { "key": "productId", "value": "prod_1" },
+    { "key": "niche", "value": "Sports" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "GET /health (API-key exempt)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/health", "host": ["{{baseUrl}}"], "path": ["health"] },
+            "description": "Alias of /api/health. Returns status, version, env, branding, database and whop mode."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Agent 1 - Scout",
+      "item": [
+        {
+          "name": "POST /api/scout/search",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"niche\": \"{{niche}}\",\n  \"min_followers\": 50000,\n  \"max_followers\": 200000,\n  \"min_views\": 10000,\n  \"max_views\": 100000\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/scout/search", "host": ["{{baseUrl}}"], "path": ["api", "scout", "search"] },
+            "description": "Filters stored creator rows only. Niche is case-insensitive; ranges are inclusive. No synthetic data."
+          }
+        },
+        {
+          "name": "GET /api/creators",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/creators?status=Qualified&niche={{niche}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "creators"],
+              "query": [
+                { "key": "status", "value": "Qualified" },
+                { "key": "niche", "value": "{{niche}}" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /api/creators/:id/approve",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"approved_by\": \"operator\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/creators/{{creatorId}}/approve", "host": ["{{baseUrl}}"], "path": ["api", "creators", "{{creatorId}}", "approve"] },
+            "description": "Sets status=Qualified and qualified=true. Never writes a lowercase approved status. Idempotent."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Agent 2 - Outreach",
+      "item": [
+        {
+          "name": "POST /api/outreach/send (draft only)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"creator_id\": 1,\n  \"template_key\": 1,\n  \"sender_name\": \"The InstaBix team\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/outreach/send", "host": ["{{baseUrl}}"], "path": ["api", "outreach", "send"] },
+            "description": "Creates a draft_needs_approval email for step 1/2/3. No provider call and no send. template_key accepts initial/follow_up/close_loop or 1/2/3."
+          }
+        },
+        {
+          "name": "POST /api/outreach/classify",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"INTERESTED - tell me more\",\n  \"creator_id\": 1\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/outreach/classify", "host": ["{{baseUrl}}"], "path": ["api", "outreach", "classify"] },
+            "description": "Classifies a reply as POSITIVE / SOFT_POSITIVE / NEGATIVE. Opt-outs are hard refusals."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Agent 3 - Product Architect",
+      "item": [
+        {
+          "name": "POST /api/products/generate",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"creator_id\": 1,\n  \"title\": \"The Practitioner Playbook\",\n  \"price_cents\": 4900,\n  \"target_words\": 7000,\n  \"branding\": \"hybrid\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/products/generate", "host": ["{{baseUrl}}"], "path": ["api", "products", "generate"] },
+            "description": "Forces TOC generation, hybrid branding and server-derived splits. Client is_first_product is ignored."
+          }
+        },
+        {
+          "name": "POST /api/products/:id/approve",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"approved_by\": \"creator\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/products/{{productNumericId}}/approve", "host": ["{{baseUrl}}"], "path": ["api", "products", "{{productNumericId}}", "approve"] },
+            "description": "Moves the product to creator_approved. Required before Whop publish."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Agent 4 - Integrator (Whop)",
+      "item": [
+        {
+          "name": "POST /api/whop/publish (KEY)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"product_id\": \"{{productId}}\",\n  \"is_first_product\": true\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/whop/publish", "host": ["{{baseUrl}}"], "path": ["api", "whop", "publish"] },
+            "description": "Accepts an integer id or prod_<id>. is_first_product is accepted but never used for split math; the stored ordinal decides 6000/4000 vs 5000/5000. Response has flat Stage 3 keys plus nested audit keys."
+          }
+        },
+        {
+          "name": "GET /api/whop/products/:id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/whop/products/{{productId}}", "host": ["{{baseUrl}}"], "path": ["api", "whop", "products", "{{productId}}"] },
+            "description": "Live mode returns real adapter data. Mock mode returns an explicit mode=mock projection with no fabricated URL."
+          }
+        },
+        {
+          "name": "POST /api/whop/webhook (Next - 501)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/api/whop/webhook", "host": ["{{baseUrl}}"], "path": ["api", "whop", "webhook"] },
+            "description": "Intentional fail-closed 501 stub with code webhook_next_cut. Creates no sale row. /api/revenue/sales is the current sale writer."
+          }
+        },
+        {
+          "name": "GET /api/revenue",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/revenue", "host": ["{{baseUrl}}"], "path": ["api", "revenue"] },
+            "description": "Summary includes integer-cent payouts_due_cents and a decimal payouts_due mirror."
+          }
+        },
+        {
+          "name": "GET /api/settings",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/settings", "host": ["{{baseUrl}}"], "path": ["api", "settings"] },
+            "description": "Niches, locked hybrid split/branding, email domain and the 50/day outreach cap."
+          }
+        }
+      ]
+    }
+  ]
+}
