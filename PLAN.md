@@ -21,10 +21,10 @@ Operate InstaBix as a real-data creator partnership platform: consent-first disc
 | M0 — Foundation | **Partial** | Root `npm run verify` passed after config/build fixes; backend `70 passed` and `compileall` clean; frontend typecheck/build clean; dashboard has explicit unreachable/empty/partial-failure states | Add CI that runs the same gates from a clean clone | CI on a clean clone was not demonstrated |
 | M1 — Tenancy & identity | **Partial** | 33-table Drizzle schema, invites, roles, sessions, audit events, and RLS verification script exist from prior work | Add and run an automated org-A/org-B isolation test across creators, products, orders, and messages | No cross-org isolation test was re-run in this session |
 | M2 — Instagram connect & sync | **Blocked** | Instagram OAuth/sync/webhook routes and integrations surface exist from prior work | Run the registered professional-account connect, sync, refresh, and disconnect loop | `META_APP_ID`, `META_APP_SECRET`, and registered test accounts not available in this session |
-| M3 — Discovery & scoring | **Partial** | Backend Agent 1 gates verified by unit tests; root provenance/score UI exists from prior work | Exercise one real permitted row end-to-end and confirm every displayed field traces to storage | No real-row end-to-end run in this session |
-| M4 — Outreach | **Blocked** | Backend approval gate and reply classification verified by unit tests | Send one real approved draft, receive a reply, and verify unsubscribe suppression | `RESEND_API_KEY`, verified domain, and a real inbox not available |
-| M5 — Product studio | **Partial / Blocked** | Backend Agent 3 TOC generation and validation verified | Generate a cited draft from permitted source data, measure word count, complete creator review and e-sign | AI credentials and real source data not available |
-| M6 — Commerce & splits | **Partial / Blocked** | Backend split and ledger math verified; root ledger/scoring Vitest suite passed (`10 passed`); Stripe webhook/checkout code exists from prior work | Run a test-mode purchase, refund, and cent-matched creator statement; run Whop sandbox publish | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and a Whop sandbox key not available |
+| M3 — Discovery & scoring | **Partial (Stage 1 code accepted)** | Stage 1 Scout gates, exact weighted score, monetization signals, and qualified-only ranked output verified in 31 backend + 18 root tests; Python/TS parity fixture both 50.80 | Exercise one real permitted row end-to-end and confirm every displayed field traces to storage | No real-row end-to-end run; `main.py`/`schemas.py` do not yet forward optional score inputs; `rank_creators` has no API caller; `models.py` stores score as Integer |
+| M4 — Outreach | **Partial / Blocked (Stage 1 code accepted)** | Kill switch, fail-closed warmup, 50/day cap, exact 3-email copy, domain/footer compliance, and all five reply actions verified in 13 policy + 11 classify + 40 backend tests | Send one real approved draft, receive a reply, and verify unsubscribe suppression | `RESEND_API_KEY`, verified domain, physical address, 14-day warmup completion, and a real inbox not available; cap is org-scoped; `no_response` needs an orchestration caller |
+| M5 — Product studio | **Partial / Blocked (Stage 1 code accepted)** | Stage 1 research clustering, 3 evidence-quoted concepts with human pick, real 4,500/6,500/10,000-word drafts, fail-closed quality gate, and 4 gated API endpoints verified in 32 backend tests | Generate a cited draft from permitted real source data, complete creator review and e-sign | AI/writer, Google Doc, PDF, and plagiarism-checker credentials unavailable; offline prose is deterministic and templated |
+| M6 — Commerce & splits | **Partial / Blocked (Stage 1 code accepted)** | Root split is server-derived only; backend split math, ordinal override rejection, production 503, per-call Whop audit, retry-once+notify, and blocked asset/link handling verified in 143 backend + 5 root split tests | Run a test-mode purchase, refund, and cent-matched creator statement; run Whop sandbox publish | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and a Whop sandbox key not available; root publish path is not wired to the FastAPI Whop adapter; Whop audit sink is in-memory |
 | M7 — Craft & performance | **Partial** | Frontend uses accessible semantics, explicit states, and a passing Next 16 build; root build passes | Add Playwright E2E, Lighthouse budget checks, and performance CI | No Lighthouse, Playwright, load, or performance CI evidence in this session |
 | M8 — Launch hardening | **Blocked / Not demonstrated** | Legal pages exist from prior work | Demonstrate backup/restore, load test, security review, incident runbooks, and App Review recording | No backups/restore drill, load test, security review, or App Review recording in this session |
 
@@ -39,6 +39,20 @@ Operate InstaBix as a real-data creator partnership platform: consent-first disc
 | Nested app files break root lint/typecheck | Root verification regresses as apps grow | Keep `frontend/**`, `backend/**`, `.venv`, and generated outputs ignored at the root; re-run `npm run verify` after app changes |
 | Degraded backend/database ambiguity | UI could imply healthy data when the database is unavailable | Frontend shows a degraded warning and withholds per-card fabrication; add a specific degraded-state test |
 | Whop production misconfiguration | Publishing could silently fabricate links | Production without `WHOP_API_KEY` selects `disabled` and returns 503 for publish; test live path only with a sandbox key |
+
+## Stage 1 acceptance (2026-11-19)
+
+Five independently judged atoms were accepted after one or two rejection/fix cycles each:
+
+| Atom | Final verdict | Core evidence |
+| --- | --- | --- |
+| STAGE1-SAFETY | ACCEPT | Kill switch and warmup block before claim/send; 50/day cap counts the right rows with a compiled-SQL regression test; root split bps are server-derived |
+| STAGE1-SCOUT | ACCEPT | Exact 0.4/0.3/0.3 score, exact signals, hard gates independent of score, Python/TS parity 50.80 |
+| STAGE1-EMAIL | ACCEPT | Exact 3-email copy, no links/attachments in Email 1, footer compliance, dedicated domain, all five reply actions in both languages |
+| STAGE1-PRODUCT | ACCEPT | Real 4,500–10,000-word prose generated and measured, 3 evidence-quoted concepts, human pick, fail-closed quality gate |
+| STAGE1-WHOP | ACCEPT | Creator approval gate, locked splits, 503 fail-closed, per-call audit, retry-once+notify, no fabricated links/assets |
+
+Stage 1 combined gates on 2026-11-19: root `npm run verify` passed (52 Vitest tests + production build); backend pytest `143 passed`, `compileall` clean; frontend typecheck and production build clean; 208 tracked files scanned with no legacy-brand hit.
 
 ## Verification strategy
 

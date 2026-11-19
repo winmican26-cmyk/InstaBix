@@ -84,7 +84,11 @@ export async function disconnectInstagramAction(): Promise<IntegrationState> {
 
 export async function sendTestEmailAction(): Promise<IntegrationState> {
   const { user, org } = await requireWorkspace();
-  if (!resendConfigured) return { error: "Email is not configured. Add RESEND_API_KEY and OUTREACH_FROM." };
+  if (!resendConfigured) {
+    return {
+      error: "Email is not configured. Add RESEND_API_KEY, OUTREACH_FROM, EMAIL_FROM_DOMAIN and OUTREACH_PHYSICAL_ADDRESS.",
+    };
+  }
 
   const result = await sendEmail({
     orgId: org.id,

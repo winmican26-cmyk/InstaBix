@@ -3,11 +3,16 @@
 Publishes an approved product to Whop, then derives the launch kit (bio link,
 story templates, launch captions). The creator approval gate is enforced here,
 at the point of publication, not only in the UI.
+
+Instagram inputs and launch analytics are deliberately offline adapters: they
+only describe official Graph API requests and never fabricate metrics,
+testimonials or performance data. Testimonial collection requires an explicit
+permission flag.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -20,6 +25,19 @@ from app.whop import WhopClient, WhopPublishResult
 
 DISCLOSURE = "Paid partnership with InstaBix. #ad"
 
+# Official Instagram Graph API surface only. No scraping, no unofficial hosts.
+OFFICIAL_IG_GRAPH_BASE = "https://graph.facebook.com"
+OFFICIAL_IG_FIELDS: tuple[str, ...] = (
+    "id",
+    "username",
+    "name",
+    "biography",
+    "profile_picture_url",
+    "followers_count",
+    "follows_count",
+    "media_count",
+)
+
 
 @dataclass(frozen=True)
 class PublishOutcome:
@@ -27,6 +45,9 @@ class PublishOutcome:
     whop: dict[str, Any]
     assets: dict[str, Any]
     created: bool
+    audit: list[dict[str, Any]] = field(default_factory=list)
+    notifications: list[dict[str, Any]] = field(default_factory=list)
+    blocked: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -35,7 +56,127 @@ class PublishOutcome:
             "product": self.product.to_dict(),
             "whop": self.whop,
             "assets": self.assets,
+            "audit": self.audit,
+            "notifications": self.notifications,
+            "blocked": self.blocked,
         }
+
+
+@dataclass(frozen=True)
+class InstagramResult:
+    status: str  # ok | blocked
+    source: str | None
+    request: dict[str, Any] | None
+    blocked_reason: str | None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "status": self.status,
+            "source": self.source,
+            "request": self.request,
+            "blocked_reason": self.blocked_reason,
+        }
+
+
+def _ig_blocked(reason: str) -> InstagramResult:
+    return InstagramResult(status="blocked", source=None, request=None, blocked_reason=reason)
+
+
+def collect_instagram_metrics(
+    *,
+    ig_user_id: str | None,
+    access_token: str | None,
+    fields: list[str] | None = None,
+    api_version: str = "v19.0",
+) -> InstagramResult:
+    """Describe an official Graph API request. Never return invented metrics.
+
+    Credentials must be supplied by the credentialed runtime; this adapter
+    never stores, logs or guesses them. Only allowlisted official fields are
+    accepted, so unofficial/scraped inputs are rejected.
+    """
+    if not ig_user_id or not access_token:
+        return _ig_blocked(
+            "Official Instagram Graph API credentials are required; no metrics were fabricated."
+        )
+    requested = list(fields) if fields else list(OFFICIAL_IG_FIELDS)
+    invalid = [name for name in requested if name not in OFFICIAL_IG_FIELDS]
+    if invalid:
+        return _ig_blocked(
+            "Only official Graph API fields are allowed; rejected: "
+            + ", ".join(sorted(str(name) for name in invalid)[:20])
+        )
+    version = api_version.strip().strip("/")
+    base = f"{OFFICIAL_IG_GRAPH_BASE}/{version}" if version else OFFICIAL_IG_GRAPH_BASE
+    return InstagramResult(
+        status="ok",
+        source="official_instagram_graph_api",
+        request={
+            "method": "GET",
+            "url": f"{base}/{ig_user_id}",
+            "params": {"fields": ",".join(requested), "access_token": "<credentialed runtime>"},
+        },
+        blocked_reason=None,
+    )
+
+
+def collect_testimonials(
+    *,
+    permission_granted: bool,
+    ig_user_id: str | None = None,
+    access_token: str | None = None,
+) -> dict[str, Any]:
+    """Collect testimonials only with explicit permission and an official source."""
+    if not permission_granted:
+        return {
+            "status": "blocked",
+            "items": [],
+            "blocked_reason": (
+                "Explicit creator permission is required before testimonials may be collected."
+            ),
+        }
+    if not ig_user_id or not access_token:
+        return {
+            "status": "blocked",
+            "items": [],
+            "blocked_reason": (
+                "Permission recorded, but no official credentialed source is configured; "
+                "no testimonials were fabricated."
+            ),
+        }
+    return {
+        "status": "blocked",
+        "items": [],
+        "blocked_reason": (
+            "Official testimonial retrieval is not configured in this adapter; "
+            "no testimonials were fabricated."
+        ),
+    }
+
+
+def track_launch_performance(
+    *,
+    access_token: str | None = None,
+    product_id: int | None = None,
+) -> dict[str, Any]:
+    """Launch-performance tracker interface. Blocked without real credentials."""
+    if not access_token:
+        return {
+            "status": "blocked",
+            "metrics": None,
+            "blocked_reason": (
+                "No official analytics credentials are configured; no performance metrics "
+                "were fabricated."
+            ),
+        }
+    return {
+        "status": "blocked",
+        "metrics": None,
+        "blocked_reason": (
+            "A credentialed analytics provider is not configured in this adapter; "
+            "no performance metrics were fabricated."
+        ),
+    }
 
 
 def validate_publishable(product: Product) -> list[str]:
@@ -116,6 +257,45 @@ def build_story_templates(product: Product, bio_link: str) -> list[dict[str, Any
     ]
 
 
+def build_story_template_specs(product: Product, bio_link: str) -> list[dict[str, Any]]:
+    """Exactly three Story template specs for the launch-asset interface.
+
+    Distinct from the legacy four-frame `story_templates` kit retained in the
+    product record; these are compact production specs.
+    """
+    audience = (product.toc or {}).get("audience") or f"{product.niche} audience"
+    return [
+        {
+            "id": "teaser",
+            "frame": 1,
+            "format": "9:16",
+            "text": f"A new {product.niche.lower()} playbook for {audience}.",
+            "sticker": "poll",
+            "disclosure": DISCLOSURE,
+        },
+        {
+            "id": "proof",
+            "frame": 2,
+            "format": "9:16",
+            "text": (
+                f"{len((product.toc or {}).get('chapters', []))} chapters, "
+                f"a {product.target_words:,}-word plan, no fluff."
+            ),
+            "sticker": "quiz",
+            "disclosure": DISCLOSURE,
+        },
+        {
+            "id": "cta",
+            "frame": 3,
+            "format": "9:16",
+            "text": "Link in bio. Read the outline before you decide.",
+            "sticker": "link",
+            "link": bio_link,
+            "disclosure": DISCLOSURE,
+        },
+    ]
+
+
 def build_launch_captions(product: Product, bio_link: str) -> list[dict[str, Any]]:
     """Three captions. Every one links to the real offer and carries disclosure."""
     audience = (product.toc or {}).get("audience") or f"people into {product.niche.lower()}"
@@ -163,11 +343,45 @@ def build_launch_captions(product: Product, bio_link: str) -> list[dict[str, Any
     ]
 
 
+def build_launch_caption_variations(
+    product: Product, bio_link: str
+) -> list[dict[str, Any]]:
+    """Exactly three launch caption variations for the launch-asset interface."""
+    return [
+        {
+            "variation": index,
+            "id": caption["id"],
+            "hook": caption["hook"],
+            "body": caption["body"],
+            "link": caption["link"] or bio_link,
+            "disclosure": caption["disclosure"],
+        }
+        for index, caption in enumerate(
+            build_launch_captions(product, bio_link), start=1
+        )
+    ]
+
+
+def _launch_assets(bio_link: str, story_templates: list[dict[str, Any]],
+                   story_specs: list[dict[str, Any]], launch_captions: list[dict[str, Any]],
+                   caption_variations: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "bio_link": bio_link,
+        "story_templates": story_templates,
+        "story_template_specs": story_specs,
+        "launch_captions": launch_captions,
+        "launch_caption_variations": caption_variations,
+        "launch_performance": track_launch_performance(product_id=None),
+    }
+
+
 def publish_product(db: Session, product: Product, client: WhopClient) -> PublishOutcome:
     """Publish to Whop and persist the resulting launch kit.
 
     Idempotent: a product that is already published returns the stored result
-    instead of creating a second Whop product.
+    instead of creating a second Whop product. The creator-approval gate is the
+    product's `creator_approved` state (set by the approval endpoint); it is
+    re-checked here at the point of publication.
     """
     validate_publishable(product)
 
@@ -179,15 +393,29 @@ def publish_product(db: Session, product: Product, client: WhopClient) -> Publis
             "product_url": product.bio_link,
             "mock": bool((product.whop_product_id or "").startswith("prod_mock_")),
             "mode": "mock" if (product.whop_product_id or "").startswith("prod_mock_") else "live",
+            "affiliate_link": None,
+            "blocked_reason": (
+                "Previously published product; no new Whop response was available to "
+                "derive an affiliate link."
+            ),
+            "asset_mapping": {},
+            "blocked": [],
+            "audit": [],
+            "notifications": [],
         }
+        bio_link = product.bio_link
+        story_templates = list(product.story_templates or [])
+        launch_captions = list(product.launch_captions or [])
         return PublishOutcome(
             product=product,
             whop=whop,
-            assets={
-                "bio_link": product.bio_link,
-                "story_templates": list(product.story_templates or []),
-                "launch_captions": list(product.launch_captions or []),
-            },
+            assets=_launch_assets(
+                bio_link,
+                story_templates,
+                build_story_template_specs(product, bio_link),
+                launch_captions,
+                build_launch_caption_variations(product, bio_link),
+            ),
             created=False,
         )
 
@@ -212,7 +440,9 @@ def publish_product(db: Session, product: Product, client: WhopClient) -> Publis
 
     bio_link = build_bio_link(product, result, client.settings.public_app_url)
     story_templates = build_story_templates(product, bio_link)
+    story_specs = build_story_template_specs(product, bio_link)
     launch_captions = build_launch_captions(product, bio_link)
+    caption_variations = build_launch_caption_variations(product, bio_link)
 
     product.whop_product_id = result.product_id
     product.whop_plan_id = result.plan_id
@@ -227,10 +457,15 @@ def publish_product(db: Session, product: Product, client: WhopClient) -> Publis
     return PublishOutcome(
         product=product,
         whop=result.to_dict(),
-        assets={
-            "bio_link": bio_link,
-            "story_templates": story_templates,
-            "launch_captions": launch_captions,
-        },
+        assets=_launch_assets(
+            bio_link,
+            story_templates,
+            story_specs,
+            launch_captions,
+            caption_variations,
+        ),
         created=True,
+        audit=result.audit,
+        notifications=result.notifications,
+        blocked=result.blocked,
     )

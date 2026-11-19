@@ -63,38 +63,36 @@ async function main() {
       {
         stepNumber: 1,
         delayDays: 0,
-        subject: "Loved your {{reel_title}} — quick idea",
+        subject: "Quick idea for your {{niche}} audience",
         body: `Hi {{first_name}},
 
-Your "{{reel_title}}" hit home — the comments are full of people asking for the exact plan behind it.
+I watched "{{reel_title}}" and noticed {{audience_insight}}.
 
-We build the product, you promote it. Zero upfront. 60/40 on the first product in your favour, then 50/50.
+We build the product, you promote it to the audience that already knows you. Zero upfront cost: 60/40 on the first product in your favour, then 50/50 after that.
 
-If you're open to it, reply INTERESTED and I'll send a one-page outline.
+Want the one-page outline? Reply INTERESTED.
 
 — {{operator_name}}`,
       },
       {
         stepNumber: 2,
         delayDays: 3,
-        subject: "Following up on the idea for your audience",
+        subject: "Re: Quick idea...",
         body: `Hi {{first_name}},
 
-Quick follow-up. We'd turn the demand you already have into a finished playbook in your voice, handle the build and checkout, and you share it with the people already asking.
+Quick follow-up on the idea for your {{niche}} audience. We did this for a creator in a similar niche and it sold from their existing audience in week 1.
 
-Worth a ten-minute look? Reply INTERESTED and I'll send the outline.
+Want the one-page outline? Reply INTERESTED.
 
 — {{operator_name}}`,
       },
       {
         stepNumber: 3,
         delayDays: 7,
-        subject: "Closing the loop",
+        subject: "Closing the loop?",
         body: `Hi {{first_name}},
 
-I'll close the loop here — no pressure at all. If a done-for-you product ever makes sense, the offer stays the same: we build it, you promote it, 60/40 then 50/50.
-
-Reply INTERESTED if you'd like the outline. Otherwise, have a great week.
+Totally get it if timing is off. Should I close your file or keep you on the list for next month?
 
 — {{operator_name}}`,
       },

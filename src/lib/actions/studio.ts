@@ -10,7 +10,7 @@ import { requireWorkspace, canReview } from "@/lib/auth/session";
 import { insertAudit } from "@/lib/audit";
 import { generateOutline } from "@/lib/ai/studio";
 import { aiConfigured } from "@/lib/env";
-import { DEFAULT_SPLIT } from "@/lib/constants";
+import { splitForProductOrdinal } from "@/lib/splits";
 import { logger } from "@/lib/logger";
 import { wordCount } from "@/lib/text";
 
@@ -30,7 +30,6 @@ const createSchema = z.object({
   creatorId: z.string().uuid("Choose a creator."),
   title: z.string().trim().min(3, "Give the product a working title.").max(90),
   priceCents: z.coerce.number().int().min(1900).max(9700),
-  splitCreatorBps: z.coerce.number().int().min(0).max(10000),
 });
 
 export async function createProductAction(_prev: StudioState, formData: FormData): Promise<StudioState> {
@@ -41,7 +40,6 @@ export async function createProductAction(_prev: StudioState, formData: FormData
     creatorId: String(formData.get("creatorId") ?? ""),
     title: String(formData.get("title") ?? ""),
     priceCents: String(formData.get("priceCents") ?? "4900"),
-    splitCreatorBps: String(formData.get("splitCreatorBps") ?? DEFAULT_SPLIT.creator),
   });
   if (!parsed.success) {
     const fieldErrors: Record<string, string> = {};
@@ -61,6 +59,13 @@ export async function createProductAction(_prev: StudioState, formData: FormData
     if (!creator) return { error: "Creator not found." } as const;
     if (creator.consentStatus !== "granted") return { error: "That creator has not granted consent yet." } as const;
 
+    const [countRow] = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(products)
+      .where(and(eq(products.orgId, org.id), eq(products.creatorId, creator.id)));
+    const ordinal = (countRow?.count ?? 0) + 1;
+    const split = splitForProductOrdinal(ordinal);
+
     const [row] = await tx
       .insert(products)
       .values({
@@ -68,8 +73,8 @@ export async function createProductAction(_prev: StudioState, formData: FormData
         creatorId: creator.id,
         title: parsed.data.title,
         priceCents: parsed.data.priceCents,
-        splitCreatorBps: parsed.data.splitCreatorBps,
-        splitOperatorBps: 10_000 - parsed.data.splitCreatorBps,
+        splitCreatorBps: split.creatorBps,
+        splitOperatorBps: split.operatorBps,
         status: "outline_pending",
       })
       .returning({ id: products.id });
@@ -81,7 +86,13 @@ export async function createProductAction(_prev: StudioState, formData: FormData
       action: "product.created",
       entityType: "product",
       entityId: row.id,
-      metadata: { creatorId: creator.id, title: parsed.data.title, splitCreatorBps: parsed.data.splitCreatorBps },
+      metadata: {
+        creatorId: creator.id,
+        title: parsed.data.title,
+        ordinal,
+        splitCreatorBps: split.creatorBps,
+        splitOperatorBps: split.operatorBps,
+      },
       ip: await requestIp(),
     });
     return { id: row.id } as const;

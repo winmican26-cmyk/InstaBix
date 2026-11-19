@@ -17,47 +17,40 @@ from typing import Any
 POSITIVE = "POSITIVE"
 SOFT_POSITIVE = "SOFT_POSITIVE"
 NEGATIVE = "NEGATIVE"
+NO_RESPONSE = "NO_RESPONSE"
 
 TEMPLATE_KEYS: tuple[str, ...] = ("initial", "follow_up", "close_loop")
 
+# Stage-1 copy. No template contains an unsubscribe URL: that belongs in the
+# compliance footer appended by the sender (src/lib/email/resend.ts).
 TEMPLATES: dict[str, dict[str, str]] = {
     "initial": {
-        "subject": "A {niche} product idea for your audience",
+        "subject": "Quick idea for your {niche} audience",
         "body": (
             "Hi {first_name},\n\n"
-            "I'm {sender_name} from InstaBix. We build and run digital products with "
-            "creators — you keep the audience and the voice, we handle product, "
-            "checkout and customer support.\n\n"
-            "One idea for your {niche} audience: {product_idea}. Before we build "
-            "anything, I'd like your honest take on whether it fits.\n\n"
-            "If you'd rather not hear from us, reply STOP or use {unsubscribe_url} "
-            "and we won't follow up.\n\n"
-            "{sender_name}\n"
-            "InstaBix"
+            "I watched \"{reel_title}\" and noticed {audience_insight}.\n\n"
+            "We build the product, you promote it to the audience that already knows you. "
+            "Zero upfront cost: 60/40 on the first product in your favour, then 50/50 after that.\n\n"
+            "Want the one-page outline? Reply INTERESTED.\n\n"
+            "— {sender_name}"
         ),
     },
     "follow_up": {
-        "subject": "One follow-up on the {niche} idea",
+        "subject": "Re: Quick idea...",
         "body": (
             "Hi {first_name},\n\n"
-            "Following up once on the {niche} product idea I sent over. No pressure "
-            "either way — a simple yes or no is useful.\n\n"
-            "If you'd like the outline first, say the word and I'll send it.\n\n"
-            "If you'd rather not hear from us again, reply STOP or use "
-            "{unsubscribe_url}.\n\n"
-            "{sender_name}\n"
-            "InstaBix"
+            "Quick follow-up on the idea for your {niche} audience. "
+            "We did this for a creator in a similar niche and it sold from their existing audience in week 1.\n\n"
+            "Want the one-page outline? Reply INTERESTED.\n\n"
+            "— {sender_name}"
         ),
     },
     "close_loop": {
-        "subject": "Closing the loop on {niche}",
+        "subject": "Closing the loop?",
         "body": (
             "Hi {first_name},\n\n"
-            "I'm closing the loop on the {niche} idea so I don't keep landing in "
-            "your inbox. If the timing changes, reply here and we can pick it up.\n\n"
-            "You can opt out for good at {unsubscribe_url}.\n\n"
-            "{sender_name}\n"
-            "InstaBix"
+            "Totally get it if timing is off. Should I close your file or keep you on the list for next month?\n\n"
+            "— {sender_name}"
         ),
     },
 }
@@ -82,24 +75,37 @@ def render_outreach(
     *,
     sender_name: str = "The InstaBix team",
     unsubscribe_url: str = "https://instabix.com/unsubscribe",
-    product_idea: str | None = None,
+    reel_title: str | None = None,
+    audience_insight: str | None = None,
 ) -> dict[str, str]:
     """Render one outreach draft. Returns subject/body plus its metadata.
 
     The caller is responsible for a human approval step before any send. This
-    function never sends and never invents a creator metric.
+    function never sends and never invents a creator metric, quote or deadline.
+    The unsubscribe URL is metadata only; the sender appends it to the footer.
     """
     if template_key not in TEMPLATES:
         raise ValueError(f"Unknown template '{template_key}'. Choose one of {TEMPLATE_KEYS}.")
 
     niche = _creator_value(creator, "niche", "creator") or "creator"
+    # Explicit argument wins, then a real creator field, then an honest
+    # placeholder. We never fabricate specifics about the creator's content.
+    resolved_reel_title = (
+        (reel_title or "").strip()
+        or _creator_value(creator, "reel_title", "").strip()
+        or "your recent Reel"
+    )
+    resolved_audience_insight = (
+        (audience_insight or "").strip()
+        or _creator_value(creator, "audience_insight", "").strip()
+        or "your audience's recurring question"
+    )
     context = {
         "first_name": first_name(creator),
         "niche": niche,
         "sender_name": sender_name,
-        "unsubscribe_url": unsubscribe_url,
-        "product_idea": product_idea
-        or f"a practical step-by-step {niche} playbook with templates and a 30-day plan",
+        "reel_title": resolved_reel_title,
+        "audience_insight": resolved_audience_insight,
     }
     template = TEMPLATES[template_key]
     return {
@@ -272,3 +278,19 @@ def classify_reply_detail(text: str) -> ReplyDetail:
 def classify_reply(text: str) -> str:
     """Return exactly POSITIVE, SOFT_POSITIVE or NEGATIVE."""
     return classify_reply_detail(text).label
+
+
+def reply_action(classification: str) -> dict[str, Any]:
+    """Map a reply class to one concrete Stage-1 workflow action (pure).
+
+    Week 1-2 still requires a human approval step before any external send.
+    """
+    if classification == POSITIVE:
+        return {"status": "SHORTLISTED-Hot", "notify_human": True, "draft_reply": "calendly_link"}
+    if classification == SOFT_POSITIVE:
+        return {"status": "Nurture", "notify_human": False, "send": "product_one_pager"}
+    if classification == NEGATIVE:
+        return {"status": "Do Not Contact", "notify_human": True, "unsubscribe": True}
+    if classification == NO_RESPONSE:
+        return {"status": "Cold", "retarget_days": 60}
+    return {"status": "Needs Human Review", "notify_human": True}

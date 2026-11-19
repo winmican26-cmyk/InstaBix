@@ -11,6 +11,12 @@ export const ALLOWED_VARIABLES = [
   "handle",
   "operator_name",
   "niche",
+  "reel_title",
+  "audience_insight",
+  "reel_url",
+  "product_idea",
+  "calendly_url",
+  "one_pager_url",
 ] as const;
 
 export function renderTemplate(subject: string, body: string, vars: TemplateVars): { subject: string; body: string } {

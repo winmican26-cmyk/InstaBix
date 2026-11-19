@@ -22,8 +22,10 @@ const schema = z.object({
 
   RESEND_API_KEY: optionalString,
   OUTREACH_FROM: optionalString,
+  EMAIL_FROM_DOMAIN: optionalString,
   OUTREACH_REPLY_TO: optionalString,
   OUTREACH_INBOX: optionalString,
+  OUTREACH_PHYSICAL_ADDRESS: optionalString,
 
   STRIPE_SECRET_KEY: optionalString,
   STRIPE_WEBHOOK_SECRET: optionalString,
@@ -61,7 +63,9 @@ export const isProduction = env.NODE_ENV === "production";
 
 export const metaConfigured = Boolean(env.META_APP_ID && env.META_APP_SECRET);
 export const metaDiscoveryConfigured = Boolean(env.META_DISCOVERY_TOKEN && env.META_DISCOVERY_IG_USER_ID);
-export const resendConfigured = Boolean(env.RESEND_API_KEY && env.OUTREACH_FROM);
+export const resendConfigured = Boolean(
+  env.RESEND_API_KEY && env.OUTREACH_FROM && env.EMAIL_FROM_DOMAIN && env.OUTREACH_PHYSICAL_ADDRESS,
+);
 export const stripeConfigured = Boolean(env.STRIPE_SECRET_KEY);
 export const aiConfigured = Boolean(env.ANTHROPIC_API_KEY);
 

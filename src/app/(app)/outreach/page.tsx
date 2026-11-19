@@ -54,8 +54,11 @@ export default async function OutreachPage() {
 
       {!resendConfigured ? (
         <Alert tone="warning" title="Email delivery is not connected">
-          Approval buttons will refuse to send until <span className="font-mono">RESEND_API_KEY</span> and{" "}
-          <span className="font-mono">OUTREACH_FROM</span> are set. Drafts still work, and the server enforces the same gate.
+          Approval buttons will refuse to send until the following are set:{" "}
+          <span className="font-mono">RESEND_API_KEY</span>,{" "}
+          <span className="font-mono">OUTREACH_FROM</span>,{" "}
+          <span className="font-mono">EMAIL_FROM_DOMAIN</span> and{" "}
+          <span className="font-mono">OUTREACH_PHYSICAL_ADDRESS</span>. Drafts still work, and the server enforces the same gate.
         </Alert>
       ) : null}
 

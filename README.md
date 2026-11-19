@@ -173,6 +173,11 @@ The dashboard is a server-rendered page. It reads health, creators, outreach, pr
 - Money is integer cents; splits are basis points.
 - Whop production without `WHOP_API_KEY` is disabled and publish returns 503.
 - The legacy design kit never ships; fake data is never used to fill a screen.
+- Outbound sending is blocked by workspace pause and fail-closed domain warmup; the 50/day cap counts this workspace's sent mail since UTC midnight.
+- Scout uses the exact 0.4/0.3/0.3 weighted score; hard qualification gates are independent of the score.
+- Email 1 is under 120 words, has no link, and asks for one `INTERESTED` reply; every send carries unsubscribe plus physical address.
+- Product drafts are validated on actual body word count (4,500–10,000), not a target label.
+- Whop publishing requires creator approval; every call is audited, failures retry once then notify a human.
 
 ## 7. Full verification
 
@@ -181,7 +186,13 @@ cd C:\Users\mican\Documents\InstaBix
 npm run verify
 ```
 
-This runs root typecheck, lint, Vitest tests, and the production build. Session result: clean typecheck, clean lint, `10 tests passed`, successful production build. The build wrapper exists because this shell exports `NODE_ENV=development`.
+This runs root typecheck, lint, Vitest tests, and the production build. Stage 1 result on 2026-11-19: clean typecheck, clean lint, `52 tests passed`, successful production build. Backend additionally passed `143 tests` with `compileall` clean; frontend typecheck and production build were clean. The build wrapper exists because this shell exports `NODE_ENV=development`.
+
+Required email configuration now includes `RESEND_API_KEY`, `OUTREACH_FROM`, `EMAIL_FROM_DOMAIN`, and `OUTREACH_PHYSICAL_ADDRESS`. Sending stays disabled until all four are set and domain warmup is explicitly completed.
+
+## 7b. Stage 1 status
+
+Stage 1 code is complete and independently accepted for Scout, approval/outreach safety, Product Architect, and the Whop Integrator. Live provider paths remain credential-blocked (Meta, Resend, Stripe, Whop sandbox, writer/plagiarism/Google Doc/PDF). Known engineering residuals are listed in `EVIDENCE.md` section 6 and `DECISIONS.md` D12–D15.
 
 ## 8. Known blockers
 

@@ -198,3 +198,64 @@ No deprecated Next APIs were adopted. The dashboard uses `connection()`, `dynami
 - Backend tests required three producer test-expectation fixes; no application source changes resulted from those fixes.
 - Root regression required three config/build fixes; after the third, `npm run verify` passed.
 - Frontend and backend judge passes were accepted with residuals recorded rather than re-run indefinitely.
+
+## 6. Stage 1 staged implementation (2026-11-19)
+
+The user supplied the Stage 1 agent block in sections. Five atoms were generated with disjoint file ownership, each independently judged. Rejections were fixed and re-judged rather than accepted:
+
+| Atom | Judge history | Final verdict |
+| --- | --- | --- |
+| STAGE1-SAFETY | REJECT (daily cap filtered recipient domain, making it a no-op) -> fix + compiled-SQL regression test -> ACCEPT | ACCEPT |
+| STAGE1-SCOUT | REQUEST-CHANGES (percentage values clamped; Python/TS engagement mismatch) -> shared normalization + parity tests -> ACCEPT | ACCEPT |
+| STAGE1-EMAIL | REJECT (TS mirror lacked `no_response`) -> explicit case + 11 TS mapping tests -> ACCEPT | ACCEPT |
+| STAGE1-PRODUCT | REJECT (222-word outline labelled 4,500 words) -> real prose generation + actual-word validation -> ACCEPT | ACCEPT |
+| STAGE1-WHOP | No rejection; creator approval gate, split locks, audit, retry, and blocked adapters verified | ACCEPT |
+
+Exact combined gate outputs on 2026-11-19:
+
+```text
+npm run verify
+> instabix@0.1.0 typecheck   (tsc --noEmit, clean)
+> instabix@0.1.0 lint        (eslint ., clean)
+> instabix@0.1.0 test
+ Test Files  5 passed (5)
+      Tests  52 passed (52)
+
+> instabix@0.1.0 build
+✓ Compiled successfully in 2.8s
+✓ Generating static pages using 15 workers (10/10) in 421ms
+
+backend: .\.venv\Scripts\python.exe -m pytest -v --disable-warnings
+======================= 143 passed, 1 warning in 6.87s ========================
+
+backend: .\.venv\Scripts\python.exe -m compileall -q app tests
+compileall_exit=0
+
+frontend: npm run typecheck  (tsc --noEmit, clean)
+frontend: npm run build       (compiled successfully, 2 static routes)
+
+legacy-brand audit (208 tracked files, excluding node_modules/.next/.venv/reference)
+TRACKED_FILES_CHECKED=208
+NO_LEGACY_BRAND_IN_TRACKED_FILES
+NO_LEGACY_BRAND_IN_BUILT_OR_VENV_OUTPUT
+```
+
+Stage-specific judge evidence:
+
+- SAFETY compiled cap condition: `("messages"."org_id" = $1 and "messages"."status" = $2 and "messages"."sent_at" >= $3)` with params `["org-123","sent","2026-11-19T00:00:00.000Z"]`; the regression test fails if `to_email` reappears.
+- SCOUT parity: Python `PY_PARITY 50.8`, TypeScript `{"total":50.8,"viewConsistency":0.6666666666666666,"unmonetizedScore":100}`.
+- PRODUCT generated word counts from real section bodies: `$19 -> 4500`, `$29 -> 4500`, `$49 -> 6500`, `$97 -> 10000`; a 222-word body with a 4,500 label is rejected.
+- WHOP: `27 passed` in `test_agent4.py` + `test_api.py`; audit records contain no headers/payload/secrets; affiliate link is null with a reason when the response lacks one.
+
+### Stage 1 tracked residuals (non-blocking, must be closed before the stated production conditions)
+
+| Residual | Owner action |
+| --- | --- |
+| 50/day cap is workspace-scoped, not installation-wide; multiple orgs sharing one sending domain can each send 50/day | Provision one verified domain per org or add an RLS-safe global counter before multi-org production |
+| Cap counts only `sent` rows after transaction commit; concurrent approvals can race | Add an in-flight counter or DB-level advisory lock |
+| Warmup requires an out-of-band owner/admin action; no UI exists | Add a settings control or seeded completion before launch |
+| `no_response` is a workflow state; no sequence orchestrator sets it after three unanswered emails | Add the sequence-state transition in outreach orchestration |
+| Scout optional score inputs are not forwarded by `/api/scout`; `rank_creators` has no API caller; `models.py.qualification_score` is Integer | Wire schemas/main/sync, promote the column to Numeric, and expose ranked output |
+| Offline product prose is deterministic/templated; writer/plagiarism/Google Doc/PDF adapters need credentials | Configure real adapters and re-judge quality |
+| Whop audit sink is in-memory; affiliate links not persisted; `hot_reply`/`sale_made` hooks have no emitters | Add durable audit storage, product columns, and event call sites |
+| Root `publishProductAction` does not call Whop; two backends remain | Decide one authoritative publish path before production |

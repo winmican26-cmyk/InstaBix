@@ -9,6 +9,7 @@ import {
   creatorAccounts,
   messageEvents,
   messages,
+  orgs,
   sequenceSteps,
   sequences,
   suppressions,
@@ -16,10 +17,19 @@ import {
 import { requireWorkspace, canReview } from "@/lib/auth/session";
 import { insertAudit } from "@/lib/audit";
 import { sendEmail } from "@/lib/email/resend";
-import { resendConfigured } from "@/lib/env";
+import { env, resendConfigured } from "@/lib/env";
 import { renderTemplate } from "@/lib/email/template";
 import { logger } from "@/lib/logger";
 import { randomToken } from "@/lib/crypto";
+import {
+  dailyCapCondition,
+  dailyCapReached,
+  domainFromEmail,
+  isOutreachPaused,
+  sendCapForDomain,
+  startOfUtcDay,
+  warmupAllowsSend,
+} from "@/lib/outreach-policy";
 
 export type OutreachState = { error?: string; success?: string; fieldErrors?: Record<string, string> };
 
@@ -244,7 +254,7 @@ export async function approveAndSendAction(messageId: string): Promise<OutreachS
   if (!canReview(role)) return { error: "Your role cannot approve sends." };
 
   if (!resendConfigured) {
-    return { error: "Email is not configured. Add RESEND_API_KEY and OUTREACH_FROM to send real mail." };
+    return { error: "Email is not configured. Add RESEND_API_KEY, OUTREACH_FROM, EMAIL_FROM_DOMAIN, and OUTREACH_PHYSICAL_ADDRESS to send real mail." };
   }
 
   const prepared = await withOrg(org.id, async (tx) => {
@@ -266,6 +276,67 @@ export async function approveAndSendAction(messageId: string): Promise<OutreachS
       .where(eq(suppressions.email, row.message.toEmail))
       .limit(1);
     if (suppressed) return { error: "Destination is on the suppression list. Send blocked." } as const;
+
+    // Stage 1 safety gates. All of these run inside the same org-scoped
+    // transaction, before the message is claimed and before any provider call.
+    const [orgRow] = await tx
+      .select({ settings: orgs.settings })
+      .from(orgs)
+      .where(eq(orgs.id, org.id))
+      .limit(1);
+    const settings = orgRow?.settings ?? {};
+
+    if (isOutreachPaused(settings)) {
+      await insertAudit(tx, {
+        orgId: org.id,
+        actorUserId: user.id,
+        action: "message.send_blocked_paused",
+        entityType: "message",
+        entityId: messageId,
+        metadata: { reason: "outreach_paused" },
+        ip: await requestIp(),
+      });
+      return { error: "Outbound sending is paused for this workspace." } as const;
+    }
+
+    if (!warmupAllowsSend(settings)) {
+      await insertAudit(tx, {
+        orgId: org.id,
+        actorUserId: user.id,
+        action: "message.send_blocked_warmup",
+        entityType: "message",
+        entityId: messageId,
+        metadata: { reason: "domain_warmup_incomplete" },
+        ip: await requestIp(),
+      });
+      return { error: "Domain warmup is not complete. Sending remains blocked." } as const;
+    }
+
+    // Stage 1 uses one verified sending domain, so the ceiling covers every
+    // message this workspace sent today. The filter is compiled by the policy
+    // helper so the wrong-column bug is covered by a unit test.
+    const [capRow] = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(messages)
+      .where(dailyCapCondition(org.id, startOfUtcDay()));
+    const sentToday = capRow?.count ?? 0;
+    if (dailyCapReached(sentToday)) {
+      await insertAudit(tx, {
+        orgId: org.id,
+        actorUserId: user.id,
+        action: "message.send_blocked_cap",
+        entityType: "message",
+        entityId: messageId,
+        metadata: {
+          reason: "daily_domain_cap",
+          domain: domainFromEmail(env.OUTREACH_FROM ?? ""),
+          cap: sendCapForDomain(),
+          sentToday,
+        },
+        ip: await requestIp(),
+      });
+      return { error: "Daily send cap reached for this domain." } as const;
+    }
 
     const [claimed] = await tx
       .update(messages)
@@ -384,4 +455,32 @@ export async function setOutreachPausedAction(paused: boolean): Promise<Outreach
 
   revalidatePath("/outreach");
   return { success: paused ? "Outbound sending paused for the whole workspace." : "Outbound sending resumed." };
+}
+
+/** Owner/admin control for recording that the sending domain has finished warming up. */
+export async function setDomainWarmupCompleteAction(complete: boolean): Promise<OutreachState> {
+  const { user, org, role } = await requireWorkspace();
+  if (role !== "owner" && role !== "admin") return { error: "Only owners and admins can change warmup status." };
+
+  await withOrg(org.id, async (tx) => {
+    await tx.execute(
+      sql`update orgs set settings = jsonb_set(coalesce(settings, '{}'::jsonb), '{domainWarmupComplete}', ${JSON.stringify(complete)}::jsonb, true), updated_at = now() where id = ${org.id}`,
+    );
+    await insertAudit(tx, {
+      orgId: org.id,
+      actorUserId: user.id,
+      action: complete ? "outreach.warmup_completed" : "outreach.warmup_reset",
+      entityType: "org",
+      entityId: org.id,
+      metadata: {},
+      ip: await requestIp(),
+    });
+  });
+
+  revalidatePath("/outreach");
+  return {
+    success: complete
+      ? "Domain warmup marked complete. Outbound sending is allowed again."
+      : "Domain warmup reset. Sending is blocked again.",
+  };
 }

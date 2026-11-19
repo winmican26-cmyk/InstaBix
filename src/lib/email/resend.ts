@@ -12,9 +12,30 @@ export async function sendEmail(input: {
   replyTo?: string;
   idempotencyKey?: string;
 }): Promise<SendResult> {
-  if (!resendConfigured) return { ok: false, error: "Email is not configured. Add RESEND_API_KEY and OUTREACH_FROM." };
+  if (!resendConfigured) {
+    return {
+      ok: false,
+      error: "Email is not configured. Add RESEND_API_KEY, OUTREACH_FROM, EMAIL_FROM_DOMAIN and OUTREACH_PHYSICAL_ADDRESS.",
+    };
+  }
+
+  // Sender/domain alignment must be exact: a mismatched domain breaks SPF/DKIM
+  // alignment and is a compliance risk. Report domains only, never credentials.
+  const fromDomain = env.OUTREACH_FROM?.match(/@([^\s>]+)/)?.[1]?.toLowerCase();
+  const configuredDomain = env.EMAIL_FROM_DOMAIN?.trim().toLowerCase();
+  if (!fromDomain || fromDomain !== configuredDomain) {
+    return {
+      ok: false,
+      error: `OUTREACH_FROM domain (${fromDomain ?? "missing"}) must match EMAIL_FROM_DOMAIN (${configuredDomain ?? "missing"}).`,
+    };
+  }
 
   const unsubscribe = unsubscribeUrl(input.orgId, input.to);
+  const address = env.OUTREACH_PHYSICAL_ADDRESS ?? "";
+  const complianceLine =
+    "You are receiving this because you applied to partner with InstaBix or published a business contact for partnership enquiries.";
+  const textWithFooter = `${input.text.trimEnd()}\n\n—\n${complianceLine}\nUnsubscribe: ${unsubscribe}\n${address}`;
+
   const html = `<!doctype html><html><body style="margin:0;background:#f6f6f8;font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#16161d">
   <div style="max-width:560px;margin:0 auto;padding:32px 20px">
     <div style="background:#fff;border:1px solid #e6e6ee;border-radius:14px;padding:28px">
@@ -24,8 +45,9 @@ export async function sendEmail(input: {
         .join("")}
     </div>
     <p style="margin:18px 4px 0;font-size:11px;line-height:1.6;color:#77778a">
-      You are receiving this because you applied to partner with InstaBix or published a business contact for partnership enquiries.
-      <a href="${unsubscribe}" style="color:#55556a">Unsubscribe</a>.
+      ${complianceLine}<br />
+      Unsubscribe: <a href="${escapeHtml(unsubscribe)}" style="color:#55556a">${escapeHtml(unsubscribe)}</a><br />
+      ${escapeHtml(address)}
     </p>
   </div></body></html>`;
 
@@ -41,7 +63,7 @@ export async function sendEmail(input: {
         from: env.OUTREACH_FROM,
         to: [input.to],
         subject: input.subject,
-        text: input.text,
+        text: textWithFooter,
         html,
         reply_to: input.replyTo ?? env.OUTREACH_REPLY_TO ?? undefined,
         headers: {

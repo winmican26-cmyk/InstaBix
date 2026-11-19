@@ -66,7 +66,7 @@ export default function PrivacyPage() {
         </p>
 
         <h2>Contact</h2>
-        <p>Privacy questions: privacy@the-operator-domain.example (replace with your workspace operator&apos;s address before launch).</p>
+        <p>Our physical mailing address is provided in every outreach email footer.</p>
       </div>
     </div>
   );

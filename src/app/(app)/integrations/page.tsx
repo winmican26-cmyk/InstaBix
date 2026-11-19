@@ -150,8 +150,11 @@ export default async function IntegrationsPage() {
               </ActionButton>
             ) : (
               <p className="text-[12px] leading-5 text-muted">
-                Add <span className="font-mono">RESEND_API_KEY</span> and <span className="font-mono">OUTREACH_FROM</span>. The
-                sending domain must have SPF, DKIM and DMARC before real outreach.
+                Add <span className="font-mono">RESEND_API_KEY</span>,{" "}
+                <span className="font-mono">OUTREACH_FROM</span>,{" "}
+                <span className="font-mono">EMAIL_FROM_DOMAIN</span> and{" "}
+                <span className="font-mono">OUTREACH_PHYSICAL_ADDRESS</span>. The sending domain must have SPF, DKIM and DMARC
+                before real outreach.
               </p>
             )}
           </CardContent>

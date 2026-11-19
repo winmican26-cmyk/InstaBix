@@ -53,3 +53,17 @@ These routes exist from prior work and are included in the passing root typechec
 - No real Stripe purchase/refund or Whop sandbox publish was executed; M6 remains Partial/Blocked.
 - Root surfaces were compile-checked and source-read but not runtime-reverified against populated real rows.
 - The backend degraded-health case (service answers, database unavailable) still shows a warning plus any successfully returned data; it was reviewed structurally but not executed as an independent runtime test.
+
+## 5. Stage 1 atom traceability (2026-11-19)
+
+| Stage 1 behavior | Implementation | Evidence |
+| --- | --- | --- |
+| Kill switch, warmup, 50/day cap at send time | `src/lib/actions/outreach.ts`, `src/lib/outreach-policy.ts` | 13 Vitest tests including compiled-SQL regression; audit actions `message.send_blocked_paused` / `_warmup` / `_cap` |
+| Locked split derivation in root create path | `src/lib/actions/studio.ts`, `src/lib/splits.ts` | 5 Vitest tests; ordinal and split audited server-side only |
+| Scout scoring and qualified-only ranking | `backend/app/agents/agent1.py`, `src/lib/scoring.ts`, `src/lib/constants.ts` | 31 backend + 18 root tests; Python/TS parity 50.80; `SCORE_MODEL_VERSION=ibx-score-v2` |
+| Exact 3-email sequence + reply actions | `backend/app/agents/agent2.py`, `scripts/seed.ts`, `src/lib/email/classify.ts` | 40 backend + 11 root tests; Email 1 rendered 53 words, no URL |
+| Compliance footer + dedicated domain | `src/lib/email/resend.ts`, `src/lib/env.ts`, `.env.example` | 4-var fail-closed config; exact domain match; unsubscribe + address in text/html |
+| Product research, 3 concepts, real draft, quality gate | `backend/app/agents/agent3.py`, `backend/app/main.py` | 32 backend tests; generated bodies measured at 4500/6500/10000 words; 4 gated endpoints |
+| Whop audit, retry, approval, blocked assets | `backend/app/whop.py`, `backend/app/routers/whop.py`, `backend/app/agents/agent4.py` | 27 backend tests; `GET /api/whop/audit`; no secrets in audit; no fabricated links |
+
+Stage 1 residuals that affect live traceability: `/api/scout` does not forward the optional scoring inputs or expose `rank_creators`; the Whop audit sink and affiliate link are not persisted; `no_response` is not yet set by a sequence orchestrator; root `publishProductAction` only changes local status. See `EVIDENCE.md` section 6.

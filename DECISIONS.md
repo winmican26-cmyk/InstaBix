@@ -90,6 +90,35 @@
 - Fake creators, fake metrics, fake inbox threads, fake product drafts, fake prompt/schema/endpoint displays, and mock record-store calls are documented in `AUDIT.md` and replaced by real sources.
 - Static design tokens may be studied; data-bearing content may not be copied.
 
+## D12 — Stage 1 safety gates (2026-11-19)
+
+- Outbound sending is blocked at the send-time gate by `orgs.settings.outreachPaused`, even for already-approved messages.
+- Domain warmup is fail-closed: only an explicit owner/admin completion allows sends; there is no time-based auto-unlock and no UI for the toggle in Stage 1.
+- The 50/day cap counts the workspace's `sent` messages since UTC midnight. The recipient-domain filter was removed after a judge found it made the cap a no-op.
+- Stage 1 uses one verified sending domain (`OUTREACH_FROM` must match `EMAIL_FROM_DOMAIN`), so the cap is workspace-scoped. Multiple workspaces sharing that domain are capped independently; before multi-org production use, either provision one domain per org or replace the counter with an RLS-safe global one.
+- `createProductAction` no longer accepts split basis points from form input; the ordinal and split are derived inside the org transaction.
+
+## D13 — Stage 1 scoring contract (2026-11-19)
+
+- Score factors are unit ratios: `engagement_rate`, `view_consistency`, and `unmonetized_score` are 0..1. A percentage-like engagement input greater than 1 is divided by 100 (5.5 -> 0.055); values above 100 clamp to 1.0.
+- The former 6% full-marks cap was removed. Python and TypeScript now use the same normalization and produce the same 2dp total; shared fixture = 50.80.
+- Hard qualification gates never consult the score. A failed gate cannot be turned into a pass by a high score.
+- `BIO_SIGNALS` and `POST_SIGNALS` are the exact seven and three strings from the Stage 1 spec; tests assert them literally, not from the implementation arrays.
+
+## D14 — Stage 1 product draft truthfulness (2026-11-19)
+
+- `word_count` is a target; `actual_word_count` is recomputed from the generated section bodies. Validation fails closed when the real prose is outside 4,500–10,000 even if the target label says 4,500.
+- With no writer adapter configured, an offline deterministic expander writes evidence-bound prose from supplied quotes, themes, creator phrases, and source ids. It is deliberately templated, not claimed to be LLM-quality creator voice; a `WriterAdapter` seam exists for configured providers.
+- Google Doc, PDF, and plagiarism/AI checking remain blocked without real credentials and never report fake success. Creator approval and human concept pick remain mandatory; no quality-gate path auto-publishes.
+
+## D15 — Stage 1 Integrator observability (2026-11-19)
+
+- Every outbound Whop attempt is recorded in an injectable call-audit sink with method/path/ids/status only; keys, headers, payloads, and secrets are never recorded or logged.
+- On terminal failure the client retries exactly once, then logs and emits a `failed_retry` human notification. Notification and launch-tracking adapters return `blocked` rather than fake delivery.
+- Cover, PDF, community/Discord, and affiliate links are mapped only from documented response fields or explicitly blocked; no upload endpoint or URL is invented.
+- The audit sink and notification events are process-local in Stage 1; durable storage, persisted affiliate links, and hot-reply/sale-made emitters are follow-up work.
+- Root `publishProductAction` still only changes local product status. External Whop publishing remains the FastAPI Integrator's responsibility in this two-backend architecture; adding a second unverified TypeScript Whop client was rejected as scope creep for Stage 1.
+
 ## Deliberately not done in this session
 
 - No legacy kit code was imported, adapted into production, or shipped.

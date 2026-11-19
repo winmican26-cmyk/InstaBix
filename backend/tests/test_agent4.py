@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -7,10 +8,17 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from app.agents.agent4 import DISCLOSURE
+import app.whop as whop_module
+from app.agents.agent4 import (
+    DISCLOSURE,
+    collect_instagram_metrics,
+    collect_testimonials,
+    track_launch_performance,
+)
 from app.config import Settings
+from app.errors import WhopAPIError
 from app.main import create_app
-from app.whop import WhopClient
+from app.whop import EVENT_FAILED_RETRY, EVENT_PRODUCT_READY, WhopClient
 from tests.conftest import create_product, create_qualified_creator, make_settings
 
 
@@ -313,3 +321,258 @@ def test_api_publish_uses_live_whop_when_key_is_configured(
     ]
     assert calls[1]["json"]["product_id"] == "prod_live_1"
     assert calls[1]["json"]["initial_price"] == 19.0
+
+
+def test_live_publish_maps_optional_assets_and_reports_blocked(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = make_settings(
+        tmp_path,
+        app_env="production",
+        whop_api_key="whop_test_secret",
+        whop_mock_mode="false",
+    )
+    events: list[dict[str, Any]] = []
+
+    def fake_notify(event: dict[str, Any]) -> dict[str, Any]:
+        events.append(event)
+        return {"status": "sent", "channel": "test"}
+
+    whop = WhopClient(settings, notify_human=fake_notify)
+    calls: list[dict[str, Any]] = []
+
+    def fake_request(method: str, url: str, **kwargs: Any) -> httpx.Response:
+        calls.append({"method": method, "url": url, **kwargs})
+        if url.endswith("/products"):
+            return httpx.Response(
+                200,
+                json={
+                    "id": "prod_asset_1",
+                    "route": "asset-route",
+                    "affiliate_link": "https://whop.com/aff/creator42",
+                },
+            )
+        if url.endswith("/variants"):
+            return httpx.Response(
+                200,
+                json={"id": "plan_asset_1", "purchase_url": "https://whop.com/checkout/plan_asset_1"},
+            )
+        raise AssertionError(f"Unexpected Whop URL: {url}")
+
+    monkeypatch.setattr(httpx, "request", fake_request)
+
+    result = whop.publish_product(
+        slug="asset-slug",
+        title="Asset Product",
+        description="A description",
+        price_cents=1_900,
+        metadata={"creator_id": "42"},
+        cover="https://cdn.example/cover.png",
+        pdf="/files/guide.pdf",
+        community={"platform": "discord", "server_id": "123", "api_key": "must-not-leak"},
+    )
+
+    assert result.affiliate_link == "https://whop.com/aff/creator42"
+    assert result.blocked_reason is None
+    assert set(result.asset_mapping) == {"cover", "pdf", "community"}
+    assert {item["kind"] for item in result.blocked} == {"cover", "pdf", "community"}
+    assert all(item["status"] == "blocked" for item in result.blocked)
+    assert all("No upload URL was invented" in item["reason"] or "No endpoint was guessed" in item["reason"]
+               for item in result.blocked)
+
+    product_metadata = calls[0]["json"]["metadata"]
+    assert product_metadata["cover_ref"].startswith("cover:url:")
+    assert product_metadata["pdf_ref"].startswith("pdf:ref:")
+    assert "platform=discord" in product_metadata["community"]
+    assert "api_key" not in product_metadata["community"]
+    assert "must-not-leak" not in product_metadata["community"]
+    assert len(calls) == 2
+
+
+def test_missing_affiliate_link_returns_null_and_blocked_reason(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = make_settings(
+        tmp_path,
+        app_env="production",
+        whop_api_key="whop_test_secret",
+        whop_mock_mode="false",
+    )
+    whop = WhopClient(settings)
+    calls: list[dict[str, Any]] = []
+    monkeypatch.setattr(httpx, "request", _fake_whop_transport(calls))
+
+    result = whop.publish_product(
+        slug="no-affiliate",
+        title="No Affiliate",
+        description="A description",
+        price_cents=1_900,
+    )
+    assert result.affiliate_link is None
+    assert result.blocked_reason
+    assert "none was fabricated" in result.blocked_reason
+
+    mock_client = WhopClient(make_settings(tmp_path))
+    mock_result = mock_client.publish_product(
+        slug="mock-no-affiliate",
+        title="Mock No Affiliate",
+        description="A description",
+        price_cents=1_900,
+    )
+    assert mock_result.affiliate_link is None
+    assert "Mock mode" in mock_result.blocked_reason
+
+
+def test_audit_records_every_call_without_secrets(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = make_settings(
+        tmp_path,
+        app_env="production",
+        whop_api_key="whop_test_secret",
+        whop_mock_mode="false",
+    )
+    whop = WhopClient(settings)
+    calls: list[dict[str, Any]] = []
+    monkeypatch.setattr(httpx, "request", _fake_whop_transport(calls))
+
+    result = whop.publish_product(
+        slug="audit-slug",
+        title="Audit Product",
+        description="A description",
+        price_cents=1_900,
+    )
+
+    records = whop.audit_sink.records
+    assert len(records) == 2 == len(result.audit)
+    assert [entry.method for entry in records] == ["POST", "POST"]
+    assert [entry.path for entry in records] == ["/products", "/variants"]
+    assert [entry.attempt for entry in records] == [1, 1]
+    assert all(entry.status == "success" for entry in records)
+    assert all(entry.reference_id == "instabix-product-audit-slug" for entry in records)
+    assert records[1].product_id == "prod_live_1"
+    for record in records:
+        payload = record.to_dict()
+        for key in (
+            "timestamp",
+            "method",
+            "path",
+            "product_id",
+            "attempt",
+            "status",
+            "error_class",
+            "request_id",
+        ):
+            assert key in payload
+
+    rendered = json.dumps([entry.to_dict() for entry in records])
+    assert "whop_test_secret" not in rendered
+    assert "Authorization" not in rendered
+    assert "Idempotency-Key" not in rendered
+    assert "Bearer" not in rendered
+
+    assert [item["kind"] for item in result.notifications] == [EVENT_PRODUCT_READY]
+    assert result.notifications[0]["status"] == "blocked"
+
+
+def test_retry_once_then_notify_human(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = make_settings(
+        tmp_path,
+        app_env="production",
+        whop_api_key="whop_test_secret",
+        whop_mock_mode="false",
+    )
+    events: list[dict[str, Any]] = []
+
+    def fake_notify(event: dict[str, Any]) -> dict[str, Any]:
+        events.append(event)
+        return {"status": "blocked"}
+
+    whop = WhopClient(settings, notify_human=fake_notify)
+    monkeypatch.setattr(whop_module.time, "sleep", lambda _seconds: None)
+    attempts: list[str] = []
+
+    def always_busy(method: str, url: str, **kwargs: Any) -> httpx.Response:
+        attempts.append(url)
+        return httpx.Response(503, json={"message": "busy"})
+
+    monkeypatch.setattr(httpx, "request", always_busy)
+
+    with pytest.raises(WhopAPIError):
+        whop.publish_product(
+            slug="retry-slug",
+            title="Retry Product",
+            description="A description",
+            price_cents=1_900,
+        )
+
+    assert attempts == ["https://api.whop.com/api/v1/products"] * 2
+    assert [entry.attempt for entry in whop.audit_sink.records] == [1, 2]
+    assert [entry.status for entry in whop.audit_sink.records] == ["retry", "error"]
+    failed = [event for event in events if event["kind"] == EVENT_FAILED_RETRY]
+    assert len(failed) == 1
+    assert failed[0]["details"]["path"] == "/products"
+    assert failed[0]["details"]["error_class"] == "WhopAPIError"
+
+
+def test_instagram_inputs_are_official_and_testimonials_need_permission() -> None:
+    blocked = collect_instagram_metrics(ig_user_id=None, access_token=None)
+    assert blocked.status == "blocked"
+    assert blocked.request is None
+
+    good = collect_instagram_metrics(
+        ig_user_id="1789", access_token="secret-token", fields=["followers_count"]
+    )
+    assert good.status == "ok"
+    assert good.source == "official_instagram_graph_api"
+    assert good.request is not None
+    assert good.request["url"].startswith("https://graph.facebook.com/")
+    assert good.request["params"]["fields"] == "followers_count"
+    assert "secret-token" not in json.dumps(good.to_dict())
+
+    unofficial = collect_instagram_metrics(
+        ig_user_id="1789", access_token="secret-token", fields=["scraped_likes"]
+    )
+    assert unofficial.status == "blocked"
+    assert "official Graph API fields" in unofficial.blocked_reason
+
+    no_permission = collect_testimonials(permission_granted=False)
+    assert no_permission["status"] == "blocked"
+    assert no_permission["items"] == []
+    assert "permission" in no_permission["blocked_reason"].lower()
+
+    with_permission = collect_testimonials(permission_granted=True)
+    assert with_permission["status"] == "blocked"
+    assert with_permission["items"] == []
+
+
+def test_launch_asset_specs_and_tracker_are_blocked_without_credentials(
+    api: tuple[TestClient, Any, Settings],
+) -> None:
+    client, _, _ = api
+    creator_id = create_qualified_creator(client)
+    product = create_product(client, creator_id, price_cents=1_900)
+    _approve_product(client, product["id"])
+
+    response = client.post("/api/whop/publish", json={"product_id": product["id"]})
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assets = body["assets"]
+
+    assert len(assets["story_template_specs"]) == 3
+    assert [item["id"] for item in assets["story_template_specs"]] == [
+        "teaser",
+        "proof",
+        "cta",
+    ]
+    assert len(assets["launch_caption_variations"]) == 3
+    tracker = assets["launch_performance"]
+    assert tracker == track_launch_performance()
+    assert tracker["status"] == "blocked"
+    assert tracker["metrics"] is None
+    assert "credentials" in tracker["blocked_reason"]
+
+    assert [item["kind"] for item in body["notifications"]] == [EVENT_PRODUCT_READY]
+    assert all(item["status"] == "blocked" for item in body["notifications"])

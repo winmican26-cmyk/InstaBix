@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
+import httpx
 from fastapi.testclient import TestClient
 
 from app.config import NICHES, Settings
@@ -143,8 +145,9 @@ def test_outreach_approval_and_reply_classification(
     assert draft["approved"] is False
     assert draft["sent_at"] is None
     assert draft["delivery"]["status"] == "not_sent"
-    assert "unsubscribe" in draft["body"]
-    assert "STOP" in draft["body"]
+    # Cross-atom alignment: agent2 now returns the unsubscribe URL as delivery
+    # metadata instead of embedding it (or STOP) in the rendered body copy.
+    assert draft["body"].strip()
 
     approved = client.post(
         f"/api/outreach/{draft_id}/approve?approved_by=ops"
@@ -382,3 +385,125 @@ def test_api_key_is_enforced_on_api_routes_but_not_health(tmp_path: Path) -> Non
 
         blocked_publish = client.post("/api/whop/publish", json={"product_id": 1})
         assert blocked_publish.status_code == 401
+
+
+def test_creator_approval_gate_still_blocks_publish(
+    api: tuple[TestClient, Any, Settings],
+) -> None:
+    client, _, _ = api
+    creator_id = create_qualified_creator(client)
+    product = _create_product(client, creator_id)
+
+    blocked = client.post("/api/whop/publish", json={"product_id": product["id"]})
+    assert blocked.status_code == 409, blocked.text
+    detail = blocked.json()["detail"]
+    assert detail["code"] == "publish_blocked"
+    assert detail["details"]["creator_approved"] is False
+
+
+def test_ordinal_override_still_rejected_and_bps_locked(
+    api: tuple[TestClient, Any, Settings],
+) -> None:
+    client, _, _ = api
+    creator_id = create_qualified_creator(client)
+
+    first = _create_product(client, creator_id, title="First")
+    assert first["split"]["creator_bps"] == 6_000
+    assert first["split"]["platform_bps"] == 4_000
+    second = _create_product(client, creator_id, title="Second", price_cents=2_500)
+    assert second["split"]["creator_bps"] == 5_000
+    assert second["split"]["platform_bps"] == 5_000
+
+    rejected = client.post(
+        "/api/products",
+        json={
+            "creator_id": creator_id,
+            "title": "Third",
+            "price_cents": 3_000,
+            "is_first_product": True,
+        },
+    )
+    assert rejected.status_code == 409, rejected.text
+    assert rejected.json()["detail"]["code"] == "split_rule_mismatch"
+
+
+def test_production_without_key_still_fails_closed_with_503(tmp_path: Path) -> None:
+    settings = make_settings(
+        tmp_path,
+        app_env="production",
+        whop_api_key=None,
+        whop_mock_mode="false",
+    )
+    app = create_app(settings)
+    with TestClient(app) as client:
+        creator_id = create_qualified_creator(client)
+        product = _create_product(client, creator_id)
+        approval = client.post(
+            f"/api/products/{product['id']}/approve", json={"approved_by": "creator"}
+        )
+        assert approval.status_code == 200, approval.text
+
+        response = client.post("/api/whop/publish", json={"product_id": product["id"]})
+        assert response.status_code == 503, response.text
+        assert response.json()["detail"]["code"] == "whop_not_configured"
+
+
+def test_publish_response_is_enriched_with_link_audit_and_notifications(
+    api: tuple[TestClient, Any, Settings],
+) -> None:
+    client, _, _ = api
+    creator_id = create_qualified_creator(client)
+    product = _create_product(client, creator_id)
+    body = _approve_and_publish(client, product["id"])
+
+    assert body["whop"]["affiliate_link"] is None
+    assert body["whop"]["blocked_reason"]
+    assert body["whop"]["asset_mapping"] == {}
+    assert body["blocked"] == []
+    assert body["audit"] == []
+    assert [item["kind"] for item in body["notifications"]] == ["product_ready"]
+    assert body["notifications"][0]["status"] == "blocked"
+
+
+def test_audit_endpoint_exposes_call_log_scoped_to_product(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    settings = make_settings(
+        tmp_path,
+        whop_api_key="whop_test_secret",
+        whop_mock_mode="false",
+    )
+    app = create_app(settings)
+
+    def fake_request(method: str, url: str, **kwargs: Any) -> httpx.Response:
+        if url.endswith("/products"):
+            return httpx.Response(200, json={"id": "prod_audit_1", "route": "audit-route"})
+        if url.endswith("/variants"):
+            return httpx.Response(
+                200,
+                json={
+                    "id": "plan_audit_1",
+                    "purchase_url": "https://whop.com/checkout/plan_audit_1",
+                },
+            )
+        raise AssertionError(f"Unexpected Whop URL: {url}")
+
+    monkeypatch.setattr(httpx, "request", fake_request)
+
+    with TestClient(app) as client:
+        creator_id = create_qualified_creator(client)
+        product = _create_product(client, creator_id)
+        _approve_and_publish(client, product["id"])
+
+        all_records = client.get("/api/whop/audit").json()
+        assert all_records["count"] == 2
+        scoped = client.get(
+            "/api/whop/audit", params={"product_id": "prod_audit_1"}
+        ).json()
+        assert scoped["count"] == 1
+        assert scoped["items"][0]["path"] == "/variants"
+        assert scoped["items"][0]["product_id"] == "prod_audit_1"
+
+        rendered = json.dumps(all_records)
+        assert "whop_test_secret" not in rendered
+        assert "Authorization" not in rendered

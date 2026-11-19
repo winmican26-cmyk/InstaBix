@@ -129,5 +129,5 @@ export const PROVIDERS = {
 } as const;
 
 export const DEFAULT_SPLIT = { creator: 6000, operator: 4000 } as const;
-export const SCORE_MODEL_VERSION = "ibx-score-v1";
+export const SCORE_MODEL_VERSION = "ibx-score-v2";
 export const MIN_MEDIA_FOR_SCORE = 8;

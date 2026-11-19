@@ -11,8 +11,10 @@ source of truth and can be versioned like prompt templates.
 
 from __future__ import annotations
 
+import re
+from collections import Counter, defaultdict
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Mapping, Protocol
 
 from app.config import NICHES
 
@@ -791,3 +793,1084 @@ def validate_toc(toc: dict[str, Any]) -> bool:
     if toc.get("total_word_target") != target:
         raise TocValidationError("TOC total_word_target must equal target_words.")
     return True
+
+
+# ---------------------------------------------------------------------------
+# Agent 3 — Product Architect (Phase A/B/C + quality gates)
+#
+# Every function in this section is pure. Research is supplied by the caller:
+# there is no scraping, no unofficial endpoint and no invented audience data.
+# Adapters are injected by the caller and fail closed when unconfigured.
+# ---------------------------------------------------------------------------
+
+MAX_POSTS = 50
+MAX_COMMENTS = 500
+MIN_POSTS = MAX_POSTS
+MIN_COMMENTS = MAX_COMMENTS
+ALLOWED_PRICES = (19, 29, 49, 97)
+PRICE_WORD_TARGETS = {19: MIN_WORDS, 29: MIN_WORDS, 49: 6_500, 97: MAX_WORDS}
+CONCEPT_PRICES = (19, 29, 49)
+REQUIRED_SECTIONS: tuple[str, ...] = (
+    "Intro",
+    "Problem",
+    "Framework (Creator's Method)",
+    "Step-by-Step Playbook",
+    "Templates/Checklists",
+    "FAQ (from real comments)",
+    "Next Steps",
+)
+AUDIENCE_ANGLES: tuple[str, ...] = (
+    "No-BS",
+    "Faith-based",
+    "Luxury on a budget",
+    "Beginner-friendly",
+)
+ANGLE_KEYWORDS: dict[str, tuple[str, ...]] = {
+    "No-BS": ("no bs", "no fluff", "straight talk", "no sugarcoat", "brutally honest"),
+    "Faith-based": ("faith", "prayer", "scripture", "bible", "church"),
+    "Luxury on a budget": (
+        "luxury on a budget",
+        "affordable luxury",
+        "high end on a budget",
+        "budget friendly luxury",
+        "dupe",
+    ),
+    "Beginner-friendly": (
+        "beginner",
+        "start here",
+        "new to this",
+        "step by step",
+        "absolute beginner",
+    ),
+}
+STOPWORDS = frozenset(
+    {
+        "a", "an", "and", "are", "as", "at", "be", "but", "by", "can", "do",
+        "does", "for", "from", "get", "had", "has", "have", "how", "i", "if",
+        "in", "is", "it", "me", "my", "of", "on", "or", "our", "so", "that",
+        "the", "their", "them", "then", "there", "this", "to", "was", "we",
+        "were", "what", "when", "where", "which", "who", "why", "will", "with",
+        "you", "your", "just", "really", "please", "thanks", "thank", "love",
+    }
+)
+QUESTION_MARKERS = ("?", "how", "what", "why", "when", "where", "which", "can")
+PAIN_MARKERS = (
+    "struggle", "stuck", "hard", "confus", "overwhelm", "problem", "fail",
+    "cannot", "can't", "don't", "doesn't", "hate", "tired", "frustrat",
+)
+DESIRE_MARKERS = ("wish", "want", "hope", "dream", "need", "goal", "wanting")
+KIND_ORDER = ("question", "pain point", "desire", "theme")
+ILLUSTRATION_TYPES = ("checklist", "framework diagram", "before/after", "step-by-step infographic")
+
+
+class DraftValidationError(ValueError):
+    pass
+
+
+def _as_mapping(value: Any, label: str) -> dict[str, Any]:
+    if not isinstance(value, Mapping):
+        raise ValueError(f"{label} must be an object.")
+    return dict(value)
+
+
+def _as_sequence(value: Any, label: str) -> list[Any]:
+    if value is None:
+        return []
+    if isinstance(value, (str, bytes, Mapping)) or not isinstance(value, (list, tuple)):
+        raise ValueError(f"{label} must be a list.")
+    return list(value)
+
+
+def _text(value: Any, label: str, *, required: bool = False) -> str:
+    if value is None:
+        if required:
+            raise ValueError(f"{label} is required.")
+        return ""
+    if not isinstance(value, str):
+        raise ValueError(f"{label} must be a string.")
+    if required and not value.strip():
+        raise ValueError(f"{label} cannot be blank.")
+    return value
+
+
+def _identifier(value: Any, fallback: str) -> str:
+    if value is None:
+        return fallback
+    if isinstance(value, bool) or not isinstance(value, (str, int)):
+        raise ValueError("Source ids must be strings or integers.")
+    cleaned = str(value).strip()
+    return cleaned or fallback
+
+
+def _likes(value: Any) -> int:
+    if value is None:
+        return 0
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ValueError("Comment likes must be a non-negative integer.")
+    return value
+
+
+def _tokens(text: str) -> list[str]:
+    raw = re.findall(r"[a-z0-9]+", text.lower())
+    return [token for token in raw if len(token) >= 2 and token not in STOPWORDS]
+
+
+def _grams(tokens: list[str]) -> tuple[str, ...]:
+    grams = set(tokens)
+    grams.update(f"{left} {right}" for left, right in zip(tokens, tokens[1:]))
+    return tuple(sorted(grams))
+
+
+def _classify(text: str) -> str:
+    lowered = text.lower()
+    if any(marker in lowered for marker in QUESTION_MARKERS):
+        return "question"
+    if any(marker in lowered for marker in PAIN_MARKERS):
+        return "pain point"
+    if any(marker in lowered for marker in DESIRE_MARKERS):
+        return "desire"
+    return "theme"
+
+
+def _specificity(theme: str) -> int:
+    return 2 if " " in theme else 1
+
+
+def _theme_sort_key(theme: str, hits: set[int]) -> tuple[Any, ...]:
+    return (-len(hits), -_specificity(theme), theme)
+
+
+def _detect_angle(posts: list[dict[str, Any]], comments: list[dict[str, Any]], explicit: Any) -> tuple[str, list[str]]:
+    if explicit is not None and str(explicit).strip():
+        name = " ".join(str(explicit).split())
+        if name not in AUDIENCE_ANGLES:
+            raise ValueError(f"audience_angle must be one of: {', '.join(AUDIENCE_ANGLES)}")
+        return name, ["explicit research input"]
+
+    sources: list[tuple[str, str]] = []
+    for post in posts:
+        sources.append(("post", " ".join(str(post.get(field, "")) for field in ("caption", "hook", "cta"))))
+    for comment in comments:
+        sources.append(("comment", str(comment.get("text", ""))))
+
+    scores: dict[str, int] = {}
+    evidence: dict[str, list[str]] = {}
+    for angle, phrases in ANGLE_KEYWORDS.items():
+        matched: list[str] = []
+        for kind, text in sources:
+            lowered = text.lower()
+            if any(phrase in lowered for phrase in phrases):
+                label = kind
+                matched.append(label)
+        scores[angle] = len(matched)
+        evidence[angle] = matched
+    best_score = max(scores.values(), default=0)
+    if best_score < 2:
+        return "Undetermined", []
+    winners = [angle for angle, score in scores.items() if score == best_score]
+    if len(winners) != 1:
+        return "Undetermined", []
+    winner = winners[0]
+    return winner, evidence[winner]
+
+
+def analyze_research(research: Mapping[str, Any]) -> dict[str, Any]:
+    """Phase A: cap, cluster, rank and gap-check supplied research only."""
+    payload = _as_mapping(research, "research")
+    raw_posts = _as_sequence(payload.get("posts"), "posts")
+    raw_comments = _as_sequence(payload.get("comments"), "comments")
+    posts_supplied, comments_supplied = len(raw_posts), len(raw_comments)
+    capped_posts = raw_posts[:MAX_POSTS]
+    capped_comments = raw_comments[:MAX_COMMENTS]
+
+    posts: list[dict[str, Any]] = []
+    for index, raw in enumerate(capped_posts):
+        post = _as_mapping(raw, f"posts[{index}]")
+        post_id = _identifier(post.get("id") or post.get("post_id"), f"post-{index}")
+        posts.append(
+            {
+                "id": post_id,
+                "index": index,
+                "caption": _text(post.get("caption"), f"posts[{index}].caption"),
+                "hook": _text(post.get("hook"), f"posts[{index}].hook"),
+                "format": _text(post.get("format"), f"posts[{index}].format"),
+                "cta": _text(post.get("cta"), f"posts[{index}].cta"),
+            }
+        )
+
+    comments: list[dict[str, Any]] = []
+    for index, raw in enumerate(capped_comments):
+        comment = _as_mapping(raw, f"comments[{index}]")
+        comment_id = _identifier(
+            comment.get("id") or comment.get("comment_id"), f"comment-{index}"
+        )
+        comments.append(
+            {
+                "id": comment_id,
+                "index": index,
+                # Never trim or rewrite a quote: verbatim means exactly as supplied.
+                "text": _text(comment.get("text"), f"comments[{index}].text", required=True),
+                "likes": _likes(comment.get("likes")),
+            }
+        )
+
+    claim_sources: list[dict[str, Any]] = []
+    for index, raw in enumerate(_as_sequence(payload.get("claim_sources"), "claim_sources")):
+        source = _as_mapping(raw, f"claim_sources[{index}]")
+        source_id = _identifier(
+            source.get("id") or source.get("source_id"), f"source-{index}"
+        )
+        claim_sources.append({"id": source_id, "detail": _text(source.get("detail"), f"claim_sources[{index}].detail")})
+
+    comment_hits: dict[str, set[int]] = defaultdict(set)
+    post_hits: dict[str, set[int]] = defaultdict(set)
+    cta_hits: dict[str, set[int]] = defaultdict(set)
+    kind_votes: dict[str, Counter[str]] = defaultdict(Counter)
+
+    for comment in comments:
+        kind = _classify(comment["text"])
+        for gram in _grams(_tokens(comment["text"])):
+            comment_hits[gram].add(comment["index"])
+            kind_votes[gram][kind] += 1
+    for post in posts:
+        all_text = " ".join((post["caption"], post["hook"], post["format"], post["cta"]))
+        for gram in _grams(_tokens(all_text)):
+            post_hits[gram].add(post["index"])
+        for gram in _grams(_tokens(post["cta"])):
+            cta_hits[gram].add(post["index"])
+
+    themes: list[dict[str, Any]] = []
+    for theme, hits in sorted(comment_hits.items(), key=lambda item: _theme_sort_key(item[0], item[1]))[:12]:
+        votes = kind_votes[theme]
+        kind = max(KIND_ORDER, key=lambda candidate: (votes[candidate], -KIND_ORDER.index(candidate)))
+        evidence_ids = [
+            comment["id"]
+            for comment in comments
+            if comment["index"] in sorted(hits)[:3]
+        ]
+        themes.append(
+            {
+                "theme": theme,
+                "count": len(hits),
+                "comment_count": len(hits),
+                "post_count": len(post_hits.get(theme, set())),
+                "cta_count": len(cta_hits.get(theme, set())),
+                "kind": kind,
+                "evidence_comment_ids": evidence_ids,
+            }
+        )
+
+    gaps = [
+        {
+            "theme": theme["theme"],
+            "comment_count": theme["comment_count"],
+            "evidence_comment_ids": theme["evidence_comment_ids"],
+        }
+        for theme in themes
+        if theme["comment_count"] > 0 and theme["post_count"] == 0 and theme["cta_count"] == 0
+    ][:8]
+
+    angle, angle_evidence = _detect_angle(posts, comments, payload.get("audience_angle"))
+    research_complete = posts_supplied >= MAX_POSTS and comments_supplied >= MAX_COMMENTS
+    source_ids = (
+        [post["id"] for post in posts]
+        + [comment["id"] for comment in comments]
+        + [source["id"] for source in claim_sources]
+    )
+    creator_phrases = [
+        _text(value, "creator_phrases", required=True)
+        for value in _as_sequence(payload.get("creator_phrases"), "creator_phrases")
+    ]
+    creator_examples = [
+        _text(value, "creator_examples", required=True)
+        for value in _as_sequence(payload.get("creator_examples"), "creator_examples")
+    ]
+
+    return {
+        "status": "complete" if research_complete else "PARTIAL",
+        "research_complete": research_complete,
+        "posts_supplied": posts_supplied,
+        "posts_used": len(posts),
+        "comments_supplied": comments_supplied,
+        "comments_used": len(comments),
+        "posts_capped": posts_supplied > MAX_POSTS,
+        "comments_capped": comments_supplied > MAX_COMMENTS,
+        "audience_angle": angle,
+        "angle_evidence": angle_evidence,
+        "themes": themes,
+        "gaps": gaps,
+        "source_ids": source_ids,
+        "creator_name": " ".join(_text(payload.get("creator_name"), "creator_name").split()) or None,
+        "creator_phrases": creator_phrases,
+        "creator_examples": creator_examples,
+        "claims": [
+            _as_mapping(raw, f"claims[{index}]")
+            for index, raw in enumerate(_as_sequence(payload.get("claims"), "claims"))
+        ],
+        "normalized": {"posts": posts, "comments": comments, "claim_sources": claim_sources},
+    }
+
+
+def _ensure_analysis(research: Mapping[str, Any]) -> dict[str, Any]:
+    if isinstance(research, Mapping) and "themes" in research and "normalized" in research:
+        return dict(research)
+    return analyze_research(research)
+
+
+def _quote(comment: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "text": comment["text"],
+        "comment_id": comment["id"],
+        "comment_index": comment["index"],
+    }
+
+
+def _quotes_for_theme(analysis: dict[str, Any], theme: Mapping[str, Any], count: int = 3) -> list[dict[str, Any]]:
+    comments = analysis["normalized"]["comments"]
+    by_id = {comment["id"]: comment for comment in comments}
+    chosen: list[dict[str, Any]] = []
+    for comment_id in theme.get("evidence_comment_ids", []):
+        if comment_id in by_id and len(chosen) < count:
+            chosen.append(_quote(by_id[comment_id]))
+    if len(chosen) < count:
+        for comment in sorted(comments, key=lambda item: (-item["likes"], item["index"])):
+            if all(quote["comment_id"] != comment["id"] for quote in chosen):
+                chosen.append(_quote(comment))
+            if len(chosen) == count:
+                break
+    return chosen[:count]
+
+
+def _toc_for_theme(theme: Mapping[str, Any], angle: str, comment_ids: list[str]) -> list[dict[str, Any]]:
+    label = str(theme["theme"])
+    chapter_titles = (
+        f"Start With Real {label} Questions",
+        f"Diagnose Your Current {label}",
+        f"The {angle} Framework",
+        f"Build Your {label} Baseline",
+        f"Step-by-Step {label} Playbook",
+        "Templates and Checklists",
+        "FAQ From Real Comments",
+        f"Measure and Adjust Your {label}",
+        "Next 30 Days",
+    )
+    return [
+        {
+            "number": number,
+            "title": title,
+            "source_comment_ids": comment_ids[:3],
+        }
+        for number, title in enumerate(chapter_titles, start=1)
+    ]
+
+
+def generate_concepts(research: Mapping[str, Any]) -> dict[str, Any]:
+    """Phase B: three deterministic concepts, each tied to real comment evidence."""
+    analysis = _ensure_analysis(research)
+    themes = analysis["themes"]
+    comments = analysis["normalized"]["comments"]
+    if len(themes) < 3:
+        raise ValueError("Three recurring themes from supplied comments are required before ideation.")
+    if len(comments) < 3:
+        raise ValueError("Three verbatim comments are required before ideation.")
+
+    concepts: list[dict[str, Any]] = []
+    for rank, theme in enumerate(themes[:3]):
+        comment_ids = theme["evidence_comment_ids"]
+        quotes = _quotes_for_theme(analysis, theme)
+        price = CONCEPT_PRICES[rank]
+        concepts.append(
+            {
+                "id": f"concept-{rank + 1}",
+                "title": f"{theme['theme'].title()} Field Guide",
+                "promise": (
+                    f"A practical guide to {theme['theme']}, built from "
+                    f"{theme['comment_count']} recurring audience questions."
+                ),
+                "price": price,
+                "price_label": f"${price}",
+                "target_buyer": (
+                    f"People in the supplied comments asking about {theme['theme']} "
+                    f"(comment ids: {', '.join(comment_ids)})"
+                ),
+                "table_of_contents": _toc_for_theme(theme, analysis["audience_angle"], comment_ids),
+                "why_will_sell": quotes,
+                "evidence": {
+                    "theme": theme["theme"],
+                    "theme_comment_count": theme["comment_count"],
+                    "comment_ids": comment_ids,
+                    "research_status": analysis["status"],
+                },
+                "awaiting_human_pick": True,
+                "human_pick_confirmed": False,
+            }
+        )
+
+    return {
+        "concepts": concepts,
+        "count": len(concepts),
+        "requires_human_pick": True,
+        "awaiting_human_pick": True,
+        "research_status": analysis["status"],
+        "research_complete": analysis["research_complete"],
+    }
+
+
+def pick_concept(concepts: Any, chosen_id: Any) -> dict[str, Any]:
+    """Require an explicit human choice. Never default to a generated concept."""
+    if isinstance(concepts, Mapping) and "concepts" in concepts:
+        items = concepts["concepts"]
+    else:
+        items = concepts
+    items = _as_sequence(items, "concepts")
+
+    if chosen_id is None or (isinstance(chosen_id, str) and not chosen_id.strip()):
+        return {
+            "selected_concept": None,
+            "chosen_id": None,
+            "awaiting_human_pick": True,
+            "human_pick_required": True,
+            "reason": "A human must explicitly choose one of the three concepts.",
+        }
+    clean_id = str(chosen_id).strip()
+    match = next(
+        (item for item in items if isinstance(item, Mapping) and str(item.get("id")) == clean_id),
+        None,
+    )
+    if match is None:
+        raise ValueError(f"Concept '{clean_id}' does not exist. A human must choose a valid concept.")
+    selected = dict(match)
+    selected["awaiting_human_pick"] = False
+    selected["human_pick_confirmed"] = True
+    return {
+        "selected_concept": selected,
+        "chosen_id": clean_id,
+        "awaiting_human_pick": False,
+        "human_pick_required": True,
+        "reason": "Human concept choice recorded.",
+    }
+
+
+class WriterAdapter(Protocol):
+    """Optional external prose writer. `expand` receives evidence, never credentials."""
+
+    def expand(self, payload: Mapping[str, Any]) -> Mapping[str, Any]: ...
+
+
+def _count_words(text: Any) -> int:
+    return len(re.findall(r"\b[\w'-]+\b", str(text)))
+
+
+def _adapter_is_configured(adapter: Any) -> bool:
+    if adapter is None:
+        return False
+    configured = getattr(adapter, "is_configured", None)
+    if callable(configured):
+        return bool(configured())
+    if hasattr(adapter, "configured"):
+        return bool(adapter.configured)
+    return False
+
+
+def _normalize_writer_sections(result: Any) -> list[dict[str, Any]]:
+    if isinstance(result, Mapping):
+        raw_sections = result.get("sections")
+    else:
+        raw_sections = result
+    if isinstance(raw_sections, Mapping):
+        items = [{"name": name, "body": body} for name, body in raw_sections.items()]
+    elif isinstance(raw_sections, (list, tuple)):
+        items = []
+        for raw in raw_sections:
+            if not isinstance(raw, Mapping) or "name" not in raw or "body" not in raw:
+                raise ValueError("Writer sections must carry a name and a body.")
+            items.append({"name": raw["name"], "body": raw["body"]})
+    else:
+        raise ValueError("Writer output must contain sections.")
+
+    names = tuple(item["name"] for item in items)
+    if names != REQUIRED_SECTIONS:
+        raise ValueError("Writer output must use the required section order exactly.")
+    for item in items:
+        if not isinstance(item["body"], str) or not item["body"].strip():
+            raise ValueError("Every writer section needs a non-empty body.")
+    return items
+
+
+def _source_anchor_fill(needed: int, source_ids: list[str], offset: int) -> str:
+    """A traceability sentence with an exact word count, built only from supplied ids."""
+    lead = "The source anchors reviewed for this section are"
+    lead_count = _count_words(lead)
+    extra = needed - lead_count
+    if extra <= 0 or not source_ids:
+        words = ["Evidence", "stays", "traceable", "to", "the", "supplied", "research", "record"]
+        return " ".join(words[: max(needed, 1)]) + "."
+    anchors = [str(source_ids[(offset + index) % len(source_ids)]) for index in range(extra)]
+    return f"{lead} {' '.join(anchors)}."
+
+
+def _expand_offline(payload: Mapping[str, Any]) -> dict[str, str]:
+    """Write section-by-section prose from supplied evidence, with no invented facts."""
+    chapters = list(payload.get("toc") or [])
+    if not chapters:
+        chapters = [{"number": 1, "title": str(payload.get("title") or "The product")}]
+    quotes = [dict(quote) for quote in (payload.get("quotes") or [])]
+    for extra in payload.get("research_quotes") or []:
+        candidate = dict(extra)
+        if not any(
+            candidate.get("comment_id") == existing.get("comment_id")
+            and candidate.get("comment_index") == existing.get("comment_index")
+            for existing in quotes
+        ):
+            quotes.append(candidate)
+    if not quotes:
+        quotes = [{"text": "", "comment_id": "unknown", "comment_index": 0}]
+    phrases = list(payload.get("creator_phrases") or [""])
+    examples = list(payload.get("creator_examples") or [""])
+    themes = list(payload.get("themes") or [])
+    gaps = list(payload.get("gaps") or [])
+    source_ids = [str(value) for value in (payload.get("source_ids") or [])]
+    creator_name = str(payload.get("creator_name") or "the creator")
+    angle = str(payload.get("audience_angle") or "Undetermined")
+    status = str(payload.get("research_status") or "PARTIAL")
+    theme_label = str(payload.get("theme") or "the supplied comments")
+
+    anchors: list[dict[str, Any]] = []
+    for item in themes:
+        anchors.append(
+            {
+                "label": str(item.get("theme", "")),
+                "count": int(item.get("count", 0) or 0),
+                "kind": str(item.get("kind", "theme")),
+                "ids": ", ".join(str(value) for value in item.get("evidence_comment_ids", [])),
+                "gap": False,
+            }
+        )
+    for item in gaps:
+        anchors.append(
+            {
+                "label": str(item.get("theme", "")),
+                "count": int(item.get("comment_count", 0) or 0),
+                "kind": "gap",
+                "ids": ", ".join(str(value) for value in item.get("evidence_comment_ids", [])),
+                "gap": True,
+            }
+        )
+    if not anchors:
+        anchors = [
+            {"label": theme_label, "count": 0, "kind": "theme", "ids": "the supplied record", "gap": False}
+        ]
+
+    def frame_interpretation(index, chapter, anchor, quote, phrase, example):
+        count_clause = (
+            f"{anchor['count']} supplied comments" if anchor["count"] else "the supplied comments"
+        )
+        return (
+            f"Chapter {chapter['number']}, {chapter['title']}, starts from the audience record rather than a guess. "
+            f"In this record, {anchor['label']} appears in {count_clause} and is treated here as a {anchor['kind']}. "
+            f"The supporting ids are {anchor['ids']}. That is an observation about the supplied data, not a claim "
+            f"about every reader. Use it to decide what this chapter needs to answer. The chosen angle is {angle}; "
+            f"keep that lens visible without turning it into a promise. InstaBix supplies the structure and the audit "
+            f"trail, while creator wording stays attributed to {creator_name}. No result, testimonial or metric has "
+            f"been added beyond the research."
+        )
+
+    def frame_quote(index, chapter, anchor, quote, phrase, example):
+        phrase_clause = (
+            f"When a creator-supplied phrase fits, keep it exactly as supplied: '{phrase}'."
+            if phrase
+            else "No creator phrase was supplied for this passage, so none is attributed."
+        )
+        return (
+            f"One supplied comment reads, verbatim: '{quote['text']}'. Its source is comment "
+            f"{quote['comment_id']} at index {quote['comment_index']}. In {chapter['title']}, treat that line as "
+            f"the question to answer, not as a slogan to repeat. {phrase_clause} The comment belongs to the evidence "
+            f"set; it does not establish a fact about people outside that set. Restate the question in your own "
+            f"words, then show the decision the reader can make with the information available here."
+        )
+
+    def frame_gap(index, chapter, anchor, quote, phrase, example):
+        gap_clause = (
+            f"The gap register records {anchor['label']} in comments but not in the supplied posts or calls to action."
+            if anchor["gap"]
+            else f"The theme {anchor['label']} is present in the supplied comments."
+        )
+        return (
+            f"{gap_clause} Chapter {chapter['number']} exists to close that gap in the reader's understanding, not "
+            f"to pretend the posts already covered it. A useful check is whether a reader who only saw the posts "
+            f"could answer the question behind '{quote['text']}' (comment {quote['comment_id']}). If they could "
+            f"not, the chapter has earned its place. Keep the wording tied to {anchor['ids'] or 'the supplied record'} "
+            f"and avoid turning a recurring comment into an unmeasured claim about the market."
+        )
+
+    def frame_framework(index, chapter, anchor, quote, phrase, example):
+        example_clause = (
+            f"Creator example supplied for this project: '{example}'."
+            if example
+            else "No creator example was supplied, so no example is attributed to the creator."
+        )
+        return (
+            f"For {chapter['title']}, the framework is deliberately plain: name the situation, name the constraint, "
+            f"then show the next decision. This matches the {angle} angle and avoids selling a shortcut the research "
+            f"never described. Anchor the explanation in {anchor['label']} ({anchor['count']} supplied comments) and "
+            f"cite comment {quote['comment_id']} where the wording helps. {example_clause} Use it as an illustration "
+            f"of method, never as proof of an outcome. The InstaBix layer keeps citations and sequence visible so "
+            f"{creator_name} can review the reasoning before anything is approved."
+        )
+
+    def frame_step(index, chapter, anchor, quote, phrase, example):
+        phrase_clause = (
+            f"Where {creator_name} supplied the phrase '{phrase}', use it as a model rather than a guarantee."
+            if phrase
+            else "No creator phrase was supplied for this step, so the wording remains instructional only."
+        )
+        return (
+            f"Step {index % 9 + 1} of the playbook asks the reader to write one sentence describing their own "
+            f"version of {anchor['label']}. This is an exercise, not a claim that the method works for everyone. "
+            f"The supplied record shows {anchor['count']} comments on the theme, and the quote '{quote['text']}' "
+            f"(comment {quote['comment_id']}) shows how the problem was phrased. Keep the language concrete. "
+            f"{phrase_clause} When the reader has written the sentence, ask them to identify the single decision it "
+            f"changes. If no decision changes, the step needs a clearer prompt before publication."
+        )
+
+    def frame_template(index, chapter, anchor, quote, phrase, example):
+        illustration = ILLUSTRATION_TYPES[index % len(ILLUSTRATION_TYPES)]
+        placement = REQUIRED_SECTIONS[index % len(REQUIRED_SECTIONS)]
+        return (
+            f"The template for {chapter['title']} has three fields: the question from the comment record, the "
+            f"decision the reader must make, and the source id that supports the wording. Fill the first field with "
+            f"'{quote['text']}' (comment {quote['comment_id']}). Fill the second from the {angle} angle. Fill the "
+            f"third from {anchor['ids'] or 'the supplied record'}. This keeps the work auditable. Illustration "
+            f"placeholder: {illustration}; placement: {placement}. It is a marked space for artwork, not generated "
+            f"image data, and the surrounding prose must remain readable without it."
+        )
+
+    def frame_faq(index, chapter, anchor, quote, phrase, example):
+        gap_sentence = (
+            "The posts did not address it in the supplied set."
+            if anchor["gap"]
+            else "The post record is separate from the comment record; do not assume it covered the question."
+        )
+        phrase_clause = (
+            f"Creator-supplied wording is quoted here exactly as supplied: '{phrase}'."
+            if phrase
+            else "No creator wording was supplied for this answer, so none is claimed."
+        )
+        return (
+            f"FAQ item {index % 3 + 1} comes from comment {quote['comment_id']} at index "
+            f"{quote['comment_index']}: '{quote['text']}'. Answer it by restating the evidence, not by widening the "
+            f"claim. The theme {anchor['label']} occurs {anchor['count']} times in the supplied comments. "
+            f"{gap_sentence} {phrase_clause} If the answer needs a number, a testimonial or a guarantee that the "
+            f"research does not contain, leave it out and return the question to {creator_name} for a decision."
+        )
+
+    def frame_review(index, chapter, anchor, quote, phrase, example):
+        return (
+            f"Before publication, {creator_name} should review this passage for voice. InstaBix has kept the "
+            f"structure, citations and section order; creator-supplied phrases are quoted exactly as provided. "
+            f"Research status is {status}, so any part of {anchor['label']} that rests on fewer comments should be "
+            f"softened rather than asserted. The evidence ids {anchor['ids'] or 'in the supplied record'} point back "
+            f"to the source material and allow a reviewer to verify each sentence without opening an external "
+            f"source. This review step is mandatory and is separate from the creator approval gate."
+        )
+
+    section_frames = {
+        "Intro": (frame_interpretation, frame_review),
+        "Problem": (frame_gap, frame_interpretation),
+        "Framework (Creator's Method)": (frame_framework, frame_interpretation),
+        "Step-by-Step Playbook": (frame_step, frame_framework, frame_template),
+        "Templates/Checklists": (frame_template, frame_step),
+        "FAQ (from real comments)": (frame_faq, frame_gap),
+        "Next Steps": (frame_review, frame_faq),
+    }
+    weights = (0.08, 0.12, 0.15, 0.30, 0.12, 0.13, 0.10)
+    target = int(payload.get("word_target", MIN_WORDS))
+    reserves = 400
+    bodies: dict[str, str] = {}
+
+    for section_index, section_name in enumerate(REQUIRED_SECTIONS):
+        budget = max(120, int(weights[section_index] * max(target - reserves, 500)))
+        frames = section_frames[section_name]
+        paragraphs: list[str] = []
+        current = 0
+        attempt = 0
+        while current < budget and attempt < 1_000:
+            frame = frames[attempt % len(frames)]
+            chapter = chapters[attempt % len(chapters)]
+            anchor = anchors[(attempt + section_index) % len(anchors)]
+            quote = quotes[attempt % len(quotes)]
+            phrase = phrases[attempt % len(phrases)]
+            example = examples[attempt % len(examples)]
+            paragraph = frame(attempt, chapter, anchor, quote, phrase, example)
+            size = _count_words(paragraph)
+            if current + size <= budget + 25:
+                paragraphs.append(paragraph)
+                current += size
+            attempt += 1
+        if not paragraphs:
+            paragraphs.append(frame_interpretation(0, chapters[0], anchors[0], quotes[0], phrases[0], examples[0]))
+        bodies[section_name] = "\n\n".join(paragraphs)
+
+    written = sum(_count_words(body) for body in bodies.values())
+    remaining = target - written
+    if remaining > 0:
+        offset = _count_words(payload.get("title", ""))
+        bodies[REQUIRED_SECTIONS[-1]] += "\n\n" + _source_anchor_fill(remaining, source_ids, offset)
+    return bodies
+
+
+def build_draft(
+    concept: Mapping[str, Any],
+    research: Mapping[str, Any],
+    writer_adapter: WriterAdapter | None = None,
+) -> dict[str, Any]:
+    """Phase C: a structured, co-branded draft with real prose and no binary generation."""
+    selected = _as_mapping(concept, "concept")
+    analysis = _ensure_analysis(research)
+    creator_name = analysis.get("creator_name")
+    if not creator_name or not str(creator_name).strip():
+        raise ValueError("creator_name is required for a hybrid InstaBix + creator draft.")
+
+    price = selected.get("price")
+    if price not in ALLOWED_PRICES:
+        raise ValueError(f"Concept price must be one of: {', '.join(str(value) for value in ALLOWED_PRICES)}")
+    word_target = PRICE_WORD_TARGETS[int(price)]
+    angle = analysis["audience_angle"]
+    evidence = selected.get("evidence", {})
+    theme = str(evidence.get("theme", "")) if isinstance(evidence, Mapping) else ""
+    quotes = selected.get("why_will_sell", [])
+    if not isinstance(quotes, (list, tuple)) or len(quotes) != 3:
+        raise ValueError("A concept needs three verbatim comment quotes before drafting.")
+    if not all(
+        isinstance(quote, Mapping)
+        and all(key in quote for key in ("text", "comment_id", "comment_index"))
+        for quote in quotes
+    ):
+        raise ValueError("Every quote must carry verbatim text plus a comment id and index.")
+
+    creator_phrases = analysis["creator_phrases"]
+    creator_examples = analysis["creator_examples"]
+    chapters = list(selected.get("table_of_contents") or [])
+    chapter_count = max(len(chapters), 1)
+    base, remainder = divmod(word_target, chapter_count)
+    chapter_word_targets = [base + (1 if index < remainder else 0) for index in range(chapter_count)]
+    weights = (0.08, 0.12, 0.15, 0.30, 0.12, 0.13, 0.10)
+    section_word_targets = {
+        name: max(1, int(weight * word_target))
+        for name, weight in zip(REQUIRED_SECTIONS, weights)
+    }
+    writer_payload = {
+        "title": selected.get("title", ""),
+        "promise": selected.get("promise", ""),
+        "price": int(price),
+        "word_target": word_target,
+        "creator_name": creator_name,
+        "co_branding": f"InstaBix x {creator_name}",
+        "audience_angle": angle,
+        "research_status": analysis["status"],
+        "theme": theme,
+        "toc": chapters,
+        "chapter_word_targets": chapter_word_targets,
+        "required_section_order": REQUIRED_SECTIONS,
+        "section_word_targets": section_word_targets,
+        "quotes": [dict(quote) for quote in quotes],
+        "research_quotes": [
+            {
+                "text": comment["text"],
+                "comment_id": comment["id"],
+                "comment_index": comment["index"],
+            }
+            for comment in analysis["normalized"]["comments"]
+            if comment["id"] in {
+                evidence_id
+                for theme in analysis["themes"]
+                for evidence_id in theme["evidence_comment_ids"][:3]
+            }
+        ][:24],
+        "creator_phrases": creator_phrases,
+        "creator_examples": creator_examples,
+        "themes": analysis["themes"],
+        "gaps": analysis["gaps"],
+        "source_ids": analysis["source_ids"],
+        "illustration_types": ILLUSTRATION_TYPES,
+    }
+
+    if _adapter_is_configured(writer_adapter):
+        try:
+            writer_result = writer_adapter.expand(writer_payload)
+        except Exception as exc:
+            raise ValueError(f"Writer adapter failed ({type(exc).__name__}); no draft was generated.") from exc
+        sections = _normalize_writer_sections(writer_result)
+        writer_words = _count_words(" ".join(section["body"] for section in sections))
+        if not MIN_WORDS <= writer_words <= MAX_WORDS:
+            raise ValueError(
+                f"Writer adapter produced {writer_words} words; the draft must contain "
+                f"{MIN_WORDS}-{MAX_WORDS} words of actual prose."
+            )
+    else:
+        offline_bodies = _expand_offline(writer_payload)
+        sections = [{"name": name, "body": offline_bodies[name]} for name in REQUIRED_SECTIONS]
+    illustrations = [
+        {"type": kind, "section": section, "status": "placeholder", "placement": f"within {section}"}
+        for kind, section in zip(
+            ILLUSTRATION_TYPES,
+            ("Intro", "Framework (Creator's Method)", "Problem", "Step-by-Step Playbook"),
+        )
+    ]
+    claims = [
+        {
+            "text": str(claim.get("text", "")),
+            "source_id": claim.get("source_id"),
+        }
+        for claim in analysis["claims"]
+        if isinstance(claim, Mapping)
+    ]
+
+    draft = {
+        "title": selected.get("title", ""),
+        "promise": selected.get("promise", ""),
+        "price": int(price),
+        "price_label": f"${int(price)}",
+        "creator_name": creator_name,
+        "co_branding": f"InstaBix x {creator_name}",
+        "audience_angle": angle,
+        "research_status": analysis["status"],
+        "selected_concept_id": selected.get("id"),
+        "human_pick_recorded": selected.get("human_pick_confirmed") is True,
+        "awaiting_human_pick": selected.get("awaiting_human_pick", True) is not False,
+        "creator_approved": False,
+        "word_count": word_target,
+        "word_count_basis": "target; actual_word_count is measured from the generated prose",
+        "sections": sections,
+        "illustrations": illustrations,
+        "claims": claims,
+        "exports": {
+            "whop_markdown": "always_available",
+            "google_doc": "adapter_required",
+            "pdf": "adapter_required",
+        },
+        "publishing": "never_auto_published",
+    }
+    draft["actual_word_count"] = _count_words(" ".join(section["body"] for section in sections))
+    draft["markdown"] = render_whop_markdown(draft)
+    return draft
+
+
+def validate_draft(draft: Mapping[str, Any], price: Any) -> bool:
+    """Fail closed on price, target label, actual prose length or section order."""
+    if not isinstance(draft, Mapping):
+        raise DraftValidationError("Draft must be an object.")
+    if price not in ALLOWED_PRICES:
+        raise DraftValidationError(f"price must be one of: {', '.join(str(value) for value in ALLOWED_PRICES)}")
+    word_count = draft.get("word_count")
+    if isinstance(word_count, bool) or not isinstance(word_count, int) or not MIN_WORDS <= word_count <= MAX_WORDS:
+        raise DraftValidationError(f"Draft word_count must be between {MIN_WORDS} and {MAX_WORDS}.")
+    sections = draft.get("sections")
+    if not isinstance(sections, (list, tuple)):
+        raise DraftValidationError("Draft sections must be a list.")
+    names = tuple(section.get("name") if isinstance(section, Mapping) else None for section in sections)
+    if names != REQUIRED_SECTIONS:
+        raise DraftValidationError("Draft sections must match the required order exactly.")
+    for index, section in enumerate(sections):
+        if not isinstance(section.get("body"), str) or not section["body"].strip():
+            raise DraftValidationError(f"Section {index + 1} needs a body.")
+    actual = _count_words(" ".join(section["body"] for section in sections))
+    if not MIN_WORDS <= actual <= MAX_WORDS:
+        raise DraftValidationError(
+            f"Draft body contains {actual} words; actual prose must be between "
+            f"{MIN_WORDS} and {MAX_WORDS} words."
+        )
+    return True
+
+
+def render_whop_markdown(draft: Mapping[str, Any]) -> str:
+    """Whop-ready Markdown is always generated locally; no network is involved."""
+    doc = _as_mapping(draft, "draft")
+    lines = [
+        f"# {doc.get('title', '')}",
+        "",
+        f"**{doc.get('co_branding', 'InstaBix')}**",
+        "",
+        f"Promise: {doc.get('promise', '')}",
+        f"Audience angle: {doc.get('audience_angle', 'Undetermined')}",
+        f"Research status: {doc.get('research_status', 'PARTIAL')}",
+        f"Target word count: {doc.get('word_count', MIN_WORDS)}",
+        f"Actual word count: {doc.get('actual_word_count', _count_words(' '.join(str(s.get('body', '')) for s in doc.get('sections', []) if isinstance(s, Mapping))))}",
+        "",
+    ]
+    for section in doc.get("sections", []):
+        if isinstance(section, Mapping):
+            lines.extend((f"## {section.get('name', '')}", str(section.get("body", "")), ""))
+    lines.append("## Illustration placeholders")
+    for item in doc.get("illustrations", []):
+        if isinstance(item, Mapping):
+            lines.append(
+                f"- [{item.get('type', 'placeholder')}] {item.get('placement', '')} "
+                f"(section: {item.get('section', '')})"
+            )
+    lines.extend(("", "Creator approval is required before publishing."))
+    return "\n".join(lines)
+
+
+def _adapter_result(adapter: Any, method: str, reason: str, draft: Mapping[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
+    if adapter is None:
+        return None, reason
+    configured = getattr(adapter, "is_configured", None)
+    if callable(configured):
+        ok = bool(configured())
+    elif hasattr(adapter, "configured"):
+        ok = bool(adapter.configured)
+    else:
+        ok = False
+    if not ok:
+        return None, reason
+    handler = getattr(adapter, method, None)
+    if not callable(handler):
+        return None, f"Adapter does not implement {method}; no export was created."
+    try:
+        result = handler(draft)
+    except Exception as exc:  # adapters are external and must never fake success
+        return None, f"Adapter failed ({type(exc).__name__}); no export was created."
+    if not isinstance(result, Mapping):
+        return None, f"Adapter returned an invalid result from {method}; no export was created."
+    return dict(result), None
+
+
+def export_google_doc(draft: Mapping[str, Any], adapter: Any | None = None) -> dict[str, Any]:
+    reason = "Google Docs credentials are not configured; no document was created."
+    result, failure = _adapter_result(adapter, "create_google_doc", reason, draft)
+    if failure:
+        return {"status": "blocked", "provider": "google_docs", "reason": failure, "fake_success": False}
+    return {
+        "status": result.get("status", "exported"),
+        "provider": "google_docs",
+        "result": result,
+        "fake_success": False,
+    }
+
+
+def export_pdf(draft: Mapping[str, Any], adapter: Any | None = None) -> dict[str, Any]:
+    reason = "PDF credentials are not configured; no PDF was created."
+    result, failure = _adapter_result(adapter, "create_pdf", reason, draft)
+    if failure:
+        return {"status": "blocked", "provider": "pdf", "reason": failure, "fake_success": False}
+    return {
+        "status": result.get("status", "exported"),
+        "provider": "pdf",
+        "result": result,
+        "fake_success": False,
+    }
+
+
+def _checker_result(checker: Any, draft: Mapping[str, Any]) -> dict[str, Any]:
+    reason = "External plagiarism/AI-detection checker is not configured; no self-assessment is permitted."
+    result, failure = _adapter_result(checker, "check", reason, draft)
+    if failure:
+        return {
+            "name": "plagiarism_ai_detection",
+            "passed": False,
+            "status": "blocked",
+            "evidence": {"reason": failure},
+        }
+    passed = result.get("passed") is True or result.get("status") == "pass"
+    evidence = result.get("evidence", result)
+    return {
+        "name": "plagiarism_ai_detection",
+        "passed": passed,
+        "status": "pass" if passed else "fail",
+        "evidence": evidence,
+    }
+
+
+def quality_gate(
+    draft: Mapping[str, Any],
+    research: Mapping[str, Any],
+    approval: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Pure quality gates. `ready_to_publish` is the AND of every gate."""
+    doc = _as_mapping(draft, "draft")
+    analysis = _ensure_analysis(_as_mapping(research, "research"))
+    recorded = _as_mapping(approval, "approval")
+
+    checker = doc.get("checker_adapter")
+    plagiarism_gate = _checker_result(checker, doc)
+
+    source_ids = set(analysis["source_ids"])
+    claims = doc.get("claims", [])
+    if not isinstance(claims, (list, tuple)):
+        claims = []
+    unverified: list[dict[str, Any]] = []
+    for index, claim in enumerate(claims):
+        if not isinstance(claim, Mapping):
+            unverified.append({"index": index, "reason": "Claim is not an object."})
+            continue
+        source_id = claim.get("source_id")
+        if source_id is None or source_id not in source_ids:
+            unverified.append(
+                {"index": index, "text": claim.get("text", ""), "reason": "unverified: no supplied source id"}
+            )
+    fact_gate = {
+        "name": "fact_check",
+        "passed": not unverified,
+        "status": "pass" if not unverified else "fail",
+        "evidence": {
+            "claims_checked": len(claims),
+            "unverified_claims": unverified,
+            "supplied_source_ids": len(source_ids),
+        },
+    }
+
+    explicitly_approved = recorded.get("creator_approved") is True
+    approval_gate = {
+        "name": "creator_approval",
+        "passed": explicitly_approved,
+        "status": "pass" if explicitly_approved else "fail",
+        "evidence": {
+            "creator_approved": explicitly_approved,
+            "approved_by": recorded.get("approved_by"),
+            "approved_at": recorded.get("approved_at"),
+        },
+    }
+
+    pick_recorded = doc.get("human_pick_recorded") is True and doc.get("awaiting_human_pick") is False
+    pick_gate = {
+        "name": "human_concept_pick",
+        "passed": pick_recorded,
+        "status": "pass" if pick_recorded else "fail",
+        "evidence": {
+            "selected_concept_id": doc.get("selected_concept_id"),
+            "human_pick_recorded": doc.get("human_pick_recorded", False),
+            "awaiting_human_pick": doc.get("awaiting_human_pick", True),
+        },
+    }
+
+    try:
+        valid_draft = validate_draft(doc, doc.get("price"))
+        structure_gate = {
+            "name": "draft_structure",
+            "passed": bool(valid_draft),
+            "status": "pass",
+            "evidence": {
+                "target_word_count": doc.get("word_count"),
+                "actual_word_count": _count_words(
+                    " ".join(str(section.get("body", "")) for section in doc.get("sections", []) if isinstance(section, Mapping))
+                ),
+                "sections": REQUIRED_SECTIONS,
+            },
+        }
+    except ValueError as exc:
+        structure_gate = {
+            "name": "draft_structure",
+            "passed": False,
+            "status": "fail",
+            "evidence": {"reason": str(exc)},
+        }
+
+    gates = [plagiarism_gate, fact_gate, approval_gate, pick_gate, structure_gate]
+    ready = all(gate["passed"] for gate in gates)
+    return {
+        "gates": {gate["name"]: gate for gate in gates},
+        "ready_to_publish": ready,
+        "publish_action": "none",
+        "note": "No endpoint in this module publishes; creator approval is mandatory.",
+    }

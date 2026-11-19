@@ -20,6 +20,10 @@ Endpoints:
     GET  /api/revenue             aggregate and recent sales
     POST /api/revenue/sales       record a paid sale with the locked split
     GET/PUT /api/settings
+    POST /api/architect/research  capped research clustering and gap analysis
+    POST /api/architect/concepts  three concepts; a human must pick one
+    POST /api/architect/draft     structured draft after a human pick
+    POST /api/architect/quality-gate  quality gates; never publishes
 """
 
 from __future__ import annotations
@@ -37,13 +41,23 @@ from fastapi import APIRouter, Depends, FastAPI, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.agents.agent1 import qualify_creator
 from app.agents.agent2 import classify_reply_detail, render_outreach
-from app.agents.agent3 import build_toc, validate_toc
+from app.agents.agent3 import (
+    analyze_research,
+    build_draft,
+    build_toc,
+    generate_concepts,
+    pick_concept,
+    quality_gate,
+    validate_draft,
+    validate_toc,
+)
 from app.config import BRANDING, NICHES, Settings
 from app.db import (
     DEFAULT_SETTINGS,
@@ -112,6 +126,29 @@ def _upsert_setting(db: Session, key: str, value: Any) -> None:
         db.add(AppSetting(key=key, value=value))
     else:
         row.value = value
+
+
+class ArchitectResearchRequest(BaseModel):
+    """Supplied research only. Caps are applied inside the pure Agent 3 core."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    posts: list[dict[str, Any]] = Field(default_factory=list, max_length=10_000)
+    comments: list[dict[str, Any]] = Field(default_factory=list, max_length=10_000)
+    creator_name: str | None = Field(default=None, max_length=120)
+    audience_angle: str | None = Field(default=None, max_length=64)
+    creator_phrases: list[str] = Field(default_factory=list, max_length=200)
+    creator_examples: list[str] = Field(default_factory=list, max_length=200)
+    claim_sources: list[dict[str, Any]] = Field(default_factory=list, max_length=200)
+    claims: list[dict[str, Any]] = Field(default_factory=list, max_length=200)
+
+
+def _architect_input(payload: dict[str, Any]) -> dict[str, Any]:
+    """Accept either a nested `research` object or top-level research fields."""
+    supplied = payload.get("research", payload)
+    if not isinstance(supplied, dict):
+        raise ValidationFailed("research must be an object.")
+    return supplied
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -705,6 +742,60 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if updates:
             db.commit()
         return _settings_payload(db, settings, client)
+
+    # ---- Agent 3: Product Architect --------------------------------------
+    # These endpoints are plan/draft/gate only. They never publish and never
+    # override creator approval, split locking or consent checks.
+
+    @api.post("/architect/research")
+    def architect_research(payload: ArchitectResearchRequest) -> dict[str, Any]:
+        try:
+            return analyze_research(payload.model_dump())
+        except (TypeError, ValueError) as exc:
+            raise ValidationFailed(str(exc)) from exc
+
+    @api.post("/architect/concepts")
+    def architect_concepts(payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            analysis = analyze_research(_architect_input(payload))
+            return generate_concepts(analysis)
+        except (TypeError, ValueError) as exc:
+            raise ValidationFailed(str(exc)) from exc
+
+    @api.post("/architect/draft")
+    def architect_draft(payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            analysis = analyze_research(_architect_input(payload))
+            generated = generate_concepts(analysis)
+            picked = pick_concept(generated, payload.get("chosen_id") or payload.get("concept_id"))
+            if picked["awaiting_human_pick"]:
+                raise ValidationFailed("A human must choose one of the three concepts before drafting.")
+            selected = picked["selected_concept"]
+            draft = build_draft(selected, analysis)
+            validate_draft(draft, selected["price"])
+        except ValidationFailed:
+            raise
+        except (TypeError, ValueError) as exc:
+            raise ValidationFailed(str(exc)) from exc
+        return {
+            "draft": draft,
+            "valid": True,
+            "requires_creator_approval": True,
+            "publishing": "blocked",
+        }
+
+    @api.post("/architect/quality-gate")
+    def architect_quality_gate(payload: dict[str, Any]) -> dict[str, Any]:
+        draft = payload.get("draft")
+        approval = payload.get("approval")
+        if not isinstance(draft, dict):
+            raise ValidationFailed("draft must be an object.")
+        if not isinstance(approval, dict):
+            raise ValidationFailed("approval must be an object.")
+        try:
+            return quality_gate(draft, _architect_input(payload), approval)
+        except (TypeError, ValueError) as exc:
+            raise ValidationFailed(str(exc)) from exc
 
     app.include_router(api)
     app.include_router(whop_router)
