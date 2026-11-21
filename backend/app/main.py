@@ -1,4 +1,4 @@
-"""InstaBix FastAPI application.
+"""VistaBix FastAPI application.
 
 Run locally:
 
@@ -142,8 +142,8 @@ def _split_payload() -> dict[str, Any]:
     first_creator, first_platform = split_for(True)
     later_creator, later_platform = split_for(False)
     return {
-        "first_product": {"creator": first_creator, "instabix": first_platform},
-        "subsequent_products": {"creator": later_creator, "instabix": later_platform},
+        "first_product": {"creator": first_creator, "vistabix": first_platform},
+        "subsequent_products": {"creator": later_creator, "vistabix": later_platform},
         "unit": "fraction of net revenue",
     }
 
@@ -289,7 +289,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         init_db(engine)
         with session_factory() as session:
             seed_default_settings(session)
-        logger.info("InstaBix API ready (env=%s, whop=%s)", settings.app_env, whop.mode)
+        logger.info("VistaBix API ready (env=%s, whop=%s)", settings.app_env, whop.mode)
         if settings.is_production and not settings.api_key:
             logger.warning("Production is running without API_KEY; /api is unprotected.")
         if not settings.is_production:
@@ -1096,7 +1096,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "refunded_cents": int(row[2]),
                 "net_cents": int(row[3]),
                 "creator_cents": int(row[4]),
-                "instabix_cents": int(row[5]),
+                "vistabix_cents": int(row[5]),
                 "payouts_due_cents": int(row[4]),
                 "payouts_due": float(_decimal_cents(int(row[4]))),
             },

@@ -14,7 +14,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         <div className="relative z-10 p-10">
           <Link href="/" className="inline-flex items-center gap-2.5">
             <Mark className="size-8" />
-            <span className="font-display text-[17px] font-semibold tracking-[-0.03em] text-fg">InstaBix</span>
+            <span className="font-display text-[17px] font-semibold tracking-[-0.03em] text-fg">VistaBix</span>
           </Link>
         </div>
         <div className="relative z-10 max-w-lg p-10">
@@ -23,7 +23,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             The partnership engine that refuses to invent a number.
           </h2>
           <p className="mt-4 text-[14px] leading-6 text-muted">
-            Instagram&apos;s platform does not hand out creator emails, comments or reach. InstaBix is built around that
+            Instagram&apos;s platform does not hand out creator emails, comments or reach. VistaBix is built around that
             reality: creators opt in, public metrics come from official APIs, and every figure is traceable.
           </p>
           <div className="mt-8 space-y-3">
@@ -43,7 +43,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           </div>
         </div>
         <div className="relative z-10 flex items-center justify-between border-t border-line p-6 text-[11px] text-faint">
-          <span>InstaBix · creator partnerships</span>
+          <span>VistaBix · creator partnerships</span>
           <Link href="/" className="inline-flex items-center gap-1.5 hover:text-muted">
             <ArrowLeft className="size-3" /> Back to site
           </Link>
@@ -54,7 +54,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         <div className="flex items-center justify-between p-5 lg:hidden">
           <Link href="/" className="inline-flex items-center gap-2">
             <Mark className="size-7" />
-            <span className="font-display text-[15px] font-semibold text-fg">InstaBix</span>
+            <span className="font-display text-[15px] font-semibold text-fg">VistaBix</span>
           </Link>
           <Link href="/" className="text-[11px] text-faint hover:text-muted">
             Back to site

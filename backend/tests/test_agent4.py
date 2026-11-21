@@ -279,7 +279,7 @@ def test_live_whop_payload_posts_product_then_one_time_variant(
     assert variant_payload["initial_price"] == 1_900 / 100
     assert variant_payload["currency"] == "usd"
     assert variant_payload["account_id"] == "acct_test"
-    assert variant_payload["metadata"]["instabix_product_id"] == product_key
+    assert variant_payload["metadata"]["vistabix_product_id"] == product_key
     assert [call["url"] for call in calls if call["url"].endswith("/variants")] == [
         "https://api.whop.com/api/v1/variants"
     ]
@@ -449,7 +449,7 @@ def test_audit_records_every_call_without_secrets(
     assert [entry.path for entry in records] == ["/products", "/variants"]
     assert [entry.attempt for entry in records] == [1, 1]
     assert all(entry.status == "success" for entry in records)
-    assert all(entry.reference_id == "instabix-product-audit-slug" for entry in records)
+    assert all(entry.reference_id == "vistabix-product-audit-slug" for entry in records)
     assert records[1].product_id == "prod_live_1"
     for record in records:
         payload = record.to_dict()

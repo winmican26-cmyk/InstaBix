@@ -1,8 +1,8 @@
 {
-  "name": "instabix",
+  "name": "vistabix",
   "version": "0.1.0",
   "private": true,
-  "description": "InstaBix — the creator partnership engine. Real data, real consent, real splits.",
+  "description": "VistaBix — the creator partnership engine. Real data, real consent, real splits.",
   "scripts": {
     "dev": "next dev",
     "build": "node scripts/build.mjs",

@@ -70,7 +70,7 @@ export default async function OutreachPage() {
 
       {consentedWithoutEmail > 0 ? (
         <Alert tone="info" title={`${consentedWithoutEmail} consented creator${consentedWithoutEmail === 1 ? "" : "s"} without an email`}>
-          Add a contact address on each creator record before they can be queued. InstaBix does not guess or harvest addresses.
+          Add a contact address on each creator record before they can be queued. VistaBix does not guess or harvest addresses.
         </Alert>
       ) : null}
 

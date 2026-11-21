@@ -1,6 +1,6 @@
-# InstaBix
+# VistaBix
 
-InstaBix is a real-data creator partnership platform. This workspace contains three additive applications:
+VistaBix is a real-data creator partnership platform. This workspace contains three additive applications:
 
 | Application | Path | Port | Purpose |
 | --- | --- | --- | --- |
@@ -59,7 +59,7 @@ Open `http://localhost:3000`.
 Run the RLS verification against a disposable database:
 
 ```powershell
-docker exec -i instabix-postgres psql -U instabix -d instabix -f - < scripts/verify/rls.sql
+docker exec -i vistabix-postgres psql -U vistabix -d vistabix -f - < scripts/verify/rls.sql
 ```
 
 This script exists in the repository; no RLS isolation test was re-run in the session documented in `EVIDENCE.md`.
@@ -149,7 +149,7 @@ Credential nodes are prepared empty in `.env.example`, `.env.local` and `backend
 | --- | --- | --- |
 | `APP_ENV` | `development` | Controls production safety rails |
 | `APP_VERSION` | `0.1.0` | Reported by health endpoint |
-| `DATABASE_URL` | `sqlite:///./instabix.db` | SQLite locally; Postgres URL in production |
+| `DATABASE_URL` | `sqlite:///./vistabix.db` | SQLite locally; Postgres URL in production |
 | `API_KEY` | unset | Optional server-side key; every `/api` route except health then requires `X-API-Key` |
 | `EMAIL_FROM_DOMAIN` | unset | Verified sender domain exposed by `GET /api/settings` |
 | `OUTREACH_DAILY_CAP` | `50` | Workspace-scoped daily outreach cap exposed by `GET /api/settings` |
@@ -173,7 +173,7 @@ Credential nodes are prepared empty in `.env.example`, `.env.local` and `backend
 
 - Branding: `hybrid`.
 - Niches: Sports, Home, Finance, Parenting, AI Tools for Small Business, Faith & Mindset.
-- Split tuple order: `(creator, InstaBix)`.
+- Split tuple order: `(creator, VistaBix)`.
 - First product: `(0.60, 0.40)`.
 - Later products: `(0.50, 0.50)`.
 - Product ordinal is derived server-side and cannot be overridden by a client.
@@ -189,7 +189,7 @@ Credential nodes are prepared empty in `.env.example`, `.env.local` and `backend
 ## 7. Full verification
 
 ```powershell
-cd C:\Users\mican\Documents\InstaBix
+cd C:\Users\mican\Documents\VistaBix
 npm run verify
 ```
 
@@ -205,7 +205,7 @@ Stage 1 code is complete and independently accepted for Scout, approval/outreach
 
 The FastAPI backend now implements the six-table Stage 2 schema: `creators`, `campaigns`, `products`, `emails`, `sales`, `settings`. Required columns, uniqueness, relationships and CHECK constraints are in `backend/app/models.py`; the readable Postgres DDL is `backend/migrations/0001_stage2.sql`. `backend/app/migrate.py` upgrades an existing database additively and idempotently (no data deletion), backfilling the new decimal mirrors from the authoritative integer columns.
 
-- Creator niche/status and product branding/status use the Stage 2 vocabularies. The operator-only branding value is `instabix_only`; the global `/api/settings` branding stays locked to `hybrid`.
+- Creator niche/status and product branding/status use the Stage 2 vocabularies. The operator-only branding value is `vistabix_only`; the global `/api/settings` branding stays locked to `hybrid`.
 - Basis points and integer cents remain the source of truth; `split_creator`/`split_operator` mirror `0.60/0.40` or `0.50/0.50` and always sum to `1.00`.
 - `campaigns.creator_id` is unique (one campaign per creator); duplicate creation returns a clear 409.
 - Outreach emails carry `step` 1-3 plus `opened`/`replied`; sales carry decimal payout mirrors, `whop_order_id` and `sold_at`.

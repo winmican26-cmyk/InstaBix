@@ -30,11 +30,11 @@ create index if not exists creators_username_trgm_idx on creator_accounts using 
 create index if not exists creators_display_name_trgm_idx on creator_accounts using gin (display_name gin_trgm_ops);
 
 -- The runtime role can read and write data, but cannot change the schema.
-grant usage on schema public to instabix_app;
-grant select, insert, update, delete on all tables in schema public to instabix_app;
-grant usage, select on all sequences in schema public to instabix_app;
-alter default privileges in schema public grant select, insert, update, delete on tables to instabix_app;
-alter default privileges in schema public grant usage, select on sequences to instabix_app;
+grant usage on schema public to vistabix_app;
+grant select, insert, update, delete on all tables in schema public to vistabix_app;
+grant usage, select on all sequences in schema public to vistabix_app;
+alter default privileges in schema public grant select, insert, update, delete on tables to vistabix_app;
+alter default privileges in schema public grant usage, select on sequences to vistabix_app;
 
 -- Nothing in the runtime role should be able to bypass policy.
-alter role instabix_app nosuperuser;
+alter role vistabix_app nosuperuser;

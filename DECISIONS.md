@@ -1,4 +1,4 @@
-# InstaBix — Architecture and Product Decisions
+# VistaBix — Architecture and Product Decisions
 
 **Date:** 2026-11-18  
 **Status:** locked decisions from this session. Changes require a new dated entry and re-verification.
@@ -35,7 +35,7 @@
 
 ## D05 — Split rules and server-derived product ordinal
 
-- Tuple order is `(creator, InstaBix)`.
+- Tuple order is `(creator, VistaBix)`.
 - `split_for(True) = (0.60, 0.40)` for the first product built with a creator.
 - `split_for(False) = (0.50, 0.50)` for subsequent products.
 - The product ordinal is derived server-side from stored products for that creator. A client-supplied ordinal is rejected when it disagrees.
@@ -55,7 +55,7 @@
 
 - All money is integer cents. No floating-point currency values are stored or rendered as authoritative amounts.
 - Split shares are basis points.
-- Payout rounding uses half-up on the creator share; the remainder goes to InstaBix so creator plus platform equals net exactly.
+- Payout rounding uses half-up on the creator share; the remainder goes to VistaBix so creator plus platform equals net exactly.
 - Refunds are bounded by gross cents and recompute the split snapshot.
 
 ## D08 — Frontend honesty
@@ -122,7 +122,7 @@
 ## D16 — Stage 2 database schema interpretation (2026-11-19)
 
 - The six-table schema in the Stage 2 block is implemented in the FastAPI backend, whose tables already use those names. The root app keeps its richer 33-table multi-tenant model; a compatibility matrix is documented in `TRACEABILITY.md`.
-- The forbidden legacy operator-brand token in the pasted enum is replaced by `instabix_only`. Product-level branding accepts `hybrid` (default), `creator_only`, and `instabix_only`. The global `/api/settings` branding value remains locked to `hybrid`.
+- The forbidden legacy operator-brand token in the pasted enum is replaced by `vistabix_only`. Product-level branding accepts `hybrid` (default), `creator_only`, and `vistabix_only`. The global `/api/settings` branding value remains locked to `hybrid`.
 - `campaigns.creator_id` is a UNIQUE FK because the key-column list is more specific than the text ER diagram. This makes one active campaign per creator; the ER text is recorded as a conflict.
 - Split columns `split_creator` / `split_operator` mirror the locked basis-point values as decimals (`6000/10000 = 0.60`, `4000/10000 = 0.40`; sum exactly 1.00). Basis points remain authoritative for money math; no floating-point value is used to compute payouts.
 - Money columns named `amount`, `payout_creator`, and `payout_operator` are decimal mirrors of the authoritative integer-cent values. Integer cents remain the source of truth for all ledger arithmetic.
@@ -151,7 +151,7 @@
 - The reference `WHOP_COMPANY_ID` maps to the shipped `WHOP_ACCOUNT_ID`. The reference `alembic`/`python-dotenv` dependencies are unnecessary: the backend uses an idempotent in-app migration runner and pydantic-settings. Production requirement pins are newer than the reference and are not downgraded.
 - The reference `backend/migrations/001_initial.sql` maps to the existing `backend/migrations/0001_stage2.sql`, which is already the full six-table Postgres DDL. A second initial DDL would duplicate the authoritative definition, so none was added.
 - The reference splits routes across six router modules. The accepted production architecture keeps one registration point in `backend/app/main.py` (with `routers/whop.py` for the audit endpoint), which the Stage 2/3 judges verified. A literal router split is a no-op refactor and is deferred to a dedicated atom if requested; it is not required for endpoint correctness.
-- The one genuinely missing artifact was an API client collection. It is added as `postman/Instabix.postman_collection.json`, `postman/Instabix.postman_environment.json` and `postman/README.md`, using InstaBix naming only, covering all 13 endpoints and carrying no credentials.
+- The one genuinely missing artifact was an API client collection. It is added as `postman/Vistabix.postman_collection.json`, `postman/Vistabix.postman_environment.json` and `postman/README.md`, using VistaBix naming only, covering all 13 endpoints and carrying no credentials.
 
 ## D19 — Section 7 Whop reference reconciliation (2026-11-19)
 
@@ -162,13 +162,13 @@
 - Money: the reference `price: float`, `int(price*100)` and float-rounded payouts are rejected. Shipped `calc_payouts(gross_cents, is_first_product, refunded_cents=0)` (`whop.py:80-115`) uses integer cents with Decimal half-up and remainder-to-platform; decimals are mirrors only.
 - Live calls: the reference single `POST /products` with `company_id` and client `metadata.branding` is superseded by the official two-call product+variant flow (`whop.py:719-751`) using `account_id`, idempotency keys, one retry and audited failure notifications.
 - Demo data / URLs: the `_demo_products` dict, dynamic product object and fabricated `https://whop.com/mock/...` URL are rejected. Publish resolves a real DB `Product` and blocks with 409 `publish_blocked` before any call; mock mode returns explicitly flagged simulated values and is never selected in production (disabled → 503).
-- Branding: the reference description's operator-brand text and split percentages are rejected. Shipped description is TOC-derived only (`agent4.py:550-555`); branding is structured metadata `{"branding": "hybrid"}` and the operator-only branding value stays `instabix_only`. The forbidden brand token appears nowhere in the shipped tree.
+- Branding: the reference description's operator-brand text and split percentages are rejected. Shipped description is TOC-derived only (`agent4.py:550-555`); branding is structured metadata `{"branding": "hybrid"}` and the operator-only branding value stays `vistabix_only`. The forbidden brand token appears nowhere in the shipped tree.
 - Story/caption counts: the reference 3 stories + 2 captions matches no shipped array and is a style difference, not a functional gap. Shipped stores and renders 4 story + 3 caption strings (`agent4.py:226-258,300-344`) plus 3 compact story specs and 3 caption variations. D17 already locked the flat keys as string renderings of structured assets with disclosure preserved; that contract is unchanged.
 - Residual `(Next)` items (webhook 501, in-memory audit/notifications, sandbox verification) are deferred cuts, not reference features; none is needed to satisfy this comparison.
 
 ## D20 — Frontend starter and SQL migration reference (blocks 8–9) reconciliation (2026-11-19)
 
-- The pasted `frontend/package.json` and toy page are the excluded legacy reference. Shipped `frontend/package.json` uses the InstaBix package name, Next 16.4.6 / React 19.3.1 (newer, not downgraded), port 3100 and explicit `dev`/`build`/`start`/`typecheck` scripts. The shipped `frontend/app/page.tsx` already fetches all seven backend surfaces in parallel, renders a full dashboard, shows no figures when health fails, and never substitutes sample data. No code change was warranted.
+- The pasted `frontend/package.json` and toy page are the excluded legacy reference. Shipped `frontend/package.json` uses the VistaBix package name, Next 16.4.6 / React 19.3.1 (newer, not downgraded), port 3100 and explicit `dev`/`build`/`start`/`typecheck` scripts. The shipped `frontend/app/page.tsx` already fetches all seven backend surfaces in parallel, renders a full dashboard, shows no figures when health fails, and never substitutes sample data. No code change was warranted.
 - The reference `backend/migrations/001_initial.sql` maps to the existing `backend/migrations/0001_stage2.sql`, which already defines the same six tables (creators, campaigns, products, emails, sales, settings) plus indexes and CHECK constraints. The backend applies additive schema changes at runtime via `backend/app/migrate.py`; the SQL file is documentation DDL. A second initial migration was not added.
 - The niche vocabulary is identical in both ('Sports', 'Home', 'Finance', 'Parenting', 'AI Tools for Small Business', 'Faith & Mindset'), so no vocabulary change was needed.
 - Reference UUID primary keys, NUMERIC-authoritative `price`/`split_*`, `status DEFAULT 'Qualified'` without a locked set, and a `calc_split(is_first BOOLEAN)` SQL function are rejected. Shipped uses INTEGER ids, authoritative `price_cents`/`split_*_bps` with decimal mirrors only, the locked seven-value creator status set defaulting to `New`, and server-derived ordinal split logic (`main.py:842-860`) with a 409 `split_rule_mismatch` on client override. No `calc_split()` function or triggers were added.
@@ -190,7 +190,7 @@
 ## D22 — Postman, setup, and dashboard wireframe (blocks 10–12) reconciliation (2026-11-19)
 
 - These three pasted blocks are stale legacy reference, not a patch. A read-only comparison against the shipped tree found no functional gap. No application code changed; only this decision, `EVIDENCE.md` section 14, `TRACEABILITY.md` section 11 and `README.md` section 7h record the verdict. No legacy-branded filenames or variable names were adopted.
-- Postman: the authoritative files are `postman/Instabix.postman_collection.json`, `postman/Instabix.postman_environment.json` and `postman/README.md`. They use `baseUrl=http://localhost:8000`, contain 13 requests covering the 13 D17 endpoint paths once each, and carry no credentials. The pasted 14-line run repeats scout/classify/publish variants, omits the creator approval/list and webhook stub requests, and was not adopted.
+- Postman: the authoritative files are `postman/Vistabix.postman_collection.json`, `postman/Vistabix.postman_environment.json` and `postman/README.md`. They use `baseUrl=http://localhost:8000`, contain 13 requests covering the 13 D17 endpoint paths once each, and carry no credentials. The pasted 14-line run repeats scout/classify/publish variants, omits the creator approval/list and webhook stub requests, and was not adopted.
 - Setup: shipped configuration uses `WHOP_ACCOUNT_ID` (not `WHOP_COMPANY_ID`), `ANTHROPIC_API_KEY` (not `OPENAI_API_KEY`), `EMAIL_FROM_DOMAIN` with no `EMAIL_FROM_NAME` node, SQLite locally with optional Postgres via `DATABASE_URL`, and the frontend on port 3100. The pasted `001_initial.sql`/`psql -f` path maps to the existing `backend/migrations/0001_stage2.sql` plus the idempotent `backend/app/migrate.py` runner; a duplicate initial DDL was not added.
 - Whop safety: mock mode is available only outside production and is disabled when production has no key. The pasted publish curl does not describe the shipped contract: a request must resolve a real, creator-approved product, the stored ordinal decides 60/40 versus 50/50, and no URL is fabricated. An uncreated `prod_1` or an unapproved row cannot be expected to return `whop_url` and a decimal split.
 - Dashboard wireframe: the pasted hard-coded figures, example product word count and “Build Kit” tab are legacy artifacts explicitly excluded by `BUILD_PROMPT.md` and `AUDIT.md`. The shipped dashboard derives every card from org-scoped database rows, measures word counts on save, stores sequences and daily caps as real rows, keeps human approval and suppression gates, and reports locked config values from `GET /api/settings` rather than a client banner.

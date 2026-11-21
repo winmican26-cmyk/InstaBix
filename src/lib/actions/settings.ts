@@ -125,7 +125,7 @@ export async function inviteMemberAction(_prev: SettingsState, formData: FormDat
     const sent = await sendEmail({
       orgId: org.id,
       to: parsed.data.email,
-      subject: `You're invited to ${org.name} on InstaBix`,
+      subject: `You're invited to ${org.name} on VistaBix`,
       text: `${user.name} invited you to ${org.name} as ${parsed.data.role}.\n\nAccept the invitation: ${inviteUrl}\n\nThis link expires in 7 days. If you were not expecting it, ignore this email.`,
       idempotencyKey: `invite:${sha256(token).slice(0, 32)}`,
     });

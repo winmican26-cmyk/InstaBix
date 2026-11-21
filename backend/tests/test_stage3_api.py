@@ -404,7 +404,7 @@ def test_revenue_adds_payouts_due_without_dropping_existing_keys(
         "refunded_cents",
         "net_cents",
         "creator_cents",
-        "instabix_cents",
+        "vistabix_cents",
     } <= summary.keys()
     assert summary["creator_cents"] == 600
     assert summary["payouts_due_cents"] == 600
@@ -415,7 +415,7 @@ def test_settings_payload_exposes_configured_email_domain_and_daily_cap(
     tmp_path: Any,
 ) -> None:
     settings = make_settings(
-        tmp_path, email_from_domain="mail.instabix.test", outreach_daily_cap=25
+        tmp_path, email_from_domain="mail.vistabix.test", outreach_daily_cap=25
     )
     with TestClient(create_app(settings)) as client:
         body = client.get("/api/settings").json()

@@ -80,25 +80,25 @@ def test_settings_are_readable_and_branding_is_locked(
     settings = client.get("/api/settings").json()
     assert settings["branding"] == "hybrid"
     assert tuple(settings["niches"]) == LOCKED_NICHES == NICHES
-    assert settings["splits"]["first_product"] == {"creator": 0.60, "instabix": 0.40}
+    assert settings["splits"]["first_product"] == {"creator": 0.60, "vistabix": 0.40}
     assert settings["splits"]["subsequent_products"] == {
         "creator": 0.50,
-        "instabix": 0.50,
+        "vistabix": 0.50,
     }
     assert settings["whop"]["mode"] == "mock"
 
-    rejected = client.put("/api/settings", json={"branding": "instabix"})
+    rejected = client.put("/api/settings", json={"branding": "vistabix"})
     assert rejected.status_code == 422, rejected.text
     assert rejected.json()["detail"]["code"] == "branding_locked"
     assert client.get("/api/settings").json()["branding"] == "hybrid"
 
     updated = client.put(
         "/api/settings",
-        json={"sender_name": "InstaBix Studio", "outreach_paused": True},
+        json={"sender_name": "VistaBix Studio", "outreach_paused": True},
     )
     assert updated.status_code == 200, updated.text
     stored = updated.json()
-    assert stored["sender_name"] == "InstaBix Studio"
+    assert stored["sender_name"] == "VistaBix Studio"
     assert stored["outreach_paused"] is True
     assert stored["branding"] == "hybrid"
 
@@ -350,7 +350,7 @@ def test_sales_split_idempotency_and_refund_through_api(
     assert summary["refunded_cents"] == 100
     assert summary["net_cents"] == 1_901
     assert summary["creator_cents"] == 1_041
-    assert summary["instabix_cents"] == 860
+    assert summary["vistabix_cents"] == 860
 
 
 def test_api_key_is_enforced_on_api_routes_but_not_health(tmp_path: Path) -> None:

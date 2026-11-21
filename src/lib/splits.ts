@@ -1,6 +1,6 @@
 /**
  * Locked split policy. The server always derives these values; no client-supplied
- * basis points are ever accepted. Tuple order is (creator, InstaBix).
+ * basis points are ever accepted. Tuple order is (creator, VistaBix).
  */
 
 export type ProductSplit = { creatorBps: number; operatorBps: number };

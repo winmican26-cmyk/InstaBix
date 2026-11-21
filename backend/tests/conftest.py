@@ -15,7 +15,7 @@ def make_settings(tmp_path: Path, **overrides: object) -> Settings:
     defaults: dict[str, object] = {
         "_env_file": None,
         "app_env": "test",
-        "database_url": f"sqlite:///{tmp_path / 'instabix-test.db'}",
+        "database_url": f"sqlite:///{tmp_path / 'vistabix-test.db'}",
         "api_key": None,
         "whop_api_key": None,
         "whop_mock_mode": "auto",

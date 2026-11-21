@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, CheckCircle2, FileText, Lock, ScrollText } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Download, FileText, Lock, ScrollText } from "lucide-react";
 import { Mark } from "@/components/brand/wordmark";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert } from "@/components/ui/alert";
@@ -54,7 +54,7 @@ export default async function PortalProductPage({ params }: { params: Promise<{ 
         <div className="flex items-center gap-2.5">
           <Mark className="size-8" />
           <span className="leading-none">
-            <span className="block font-display text-[16px] font-semibold tracking-[-0.03em] text-fg">InstaBix</span>
+            <span className="block font-display text-[16px] font-semibold tracking-[-0.03em] text-fg">VistaBix</span>
             <span className="mt-1 block font-mono text-[9px] uppercase tracking-[0.16em] text-faint">{data.org.name}</span>
           </span>
         </div>
@@ -102,16 +102,26 @@ export default async function PortalProductPage({ params }: { params: Promise<{ 
 
       <Card className="mt-6">
         <CardHeader>
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="size-4 text-lime" strokeWidth={1.75} aria-hidden />
-              The product
-            </CardTitle>
-            <CardDescription>
-              {chapters.length === 0
-                ? "No chapter exists yet."
-                : "Written by the operator in your voice. Your captions are cited, never invented."}
-            </CardDescription>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="size-4 text-lime" strokeWidth={1.75} aria-hidden />
+                The product
+              </CardTitle>
+              <CardDescription>
+                {chapters.length === 0
+                  ? "No chapter exists yet."
+                  : "Written by the operator in your voice. Your captions are cited, never invented."}
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button asChild variant="outline" size="sm">
+                <a href={`/api/products/${product.id}/export/pdf`} target="_blank" rel="noopener noreferrer">
+                  <Download className="mr-1.5 size-3.5" />
+                  Download PDF
+                </a>
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-6">

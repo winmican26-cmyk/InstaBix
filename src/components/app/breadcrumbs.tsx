@@ -24,7 +24,7 @@ export function Breadcrumbs() {
   return (
     <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-[12.5px]">
       <Link href="/dashboard" className="text-faint transition-colors hover:text-muted">
-        InstaBix
+        VistaBix
       </Link>
       {segments.map((segment, i) => {
         const href = `/${segments.slice(0, i + 1).join("/")}`;

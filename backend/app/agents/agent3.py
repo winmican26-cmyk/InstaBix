@@ -21,7 +21,7 @@ from app.config import NICHES
 MIN_WORDS = 4_500
 MAX_WORDS = 10_000
 DEFAULT_WORDS = 7_000
-OUTLINE_VERSION = "instabix-toc-v1"
+OUTLINE_VERSION = "vistabix-toc-v1"
 MIN_CHAPTERS = 8
 
 
@@ -1370,7 +1370,7 @@ def _expand_offline(payload: Mapping[str, Any]) -> dict[str, str]:
             f"In this record, {anchor['label']} appears in {count_clause} and is treated here as a {anchor['kind']}. "
             f"The supporting ids are {anchor['ids']}. That is an observation about the supplied data, not a claim "
             f"about every reader. Use it to decide what this chapter needs to answer. The chosen angle is {angle}; "
-            f"keep that lens visible without turning it into a promise. InstaBix supplies the structure and the audit "
+            f"keep that lens visible without turning it into a promise. VistaBix supplies the structure and the audit "
             f"trail, while creator wording stays attributed to {creator_name}. No result, testimonial or metric has "
             f"been added beyond the research."
         )
@@ -1414,7 +1414,7 @@ def _expand_offline(payload: Mapping[str, Any]) -> dict[str, str]:
             f"then show the next decision. This matches the {angle} angle and avoids selling a shortcut the research "
             f"never described. Anchor the explanation in {anchor['label']} ({anchor['count']} supplied comments) and "
             f"cite comment {quote['comment_id']} where the wording helps. {example_clause} Use it as an illustration "
-            f"of method, never as proof of an outcome. The InstaBix layer keeps citations and sequence visible so "
+            f"of method, never as proof of an outcome. The VistaBix layer keeps citations and sequence visible so "
             f"{creator_name} can review the reasoning before anything is approved."
         )
 
@@ -1466,7 +1466,7 @@ def _expand_offline(payload: Mapping[str, Any]) -> dict[str, str]:
 
     def frame_review(index, chapter, anchor, quote, phrase, example):
         return (
-            f"Before publication, {creator_name} should review this passage for voice. InstaBix has kept the "
+            f"Before publication, {creator_name} should review this passage for voice. VistaBix has kept the "
             f"structure, citations and section order; creator-supplied phrases are quoted exactly as provided. "
             f"Research status is {status}, so any part of {anchor['label']} that rests on fewer comments should be "
             f"softened rather than asserted. The evidence ids {anchor['ids'] or 'in the supplied record'} point back "
@@ -1529,7 +1529,7 @@ def build_draft(
     analysis = _ensure_analysis(research)
     creator_name = analysis.get("creator_name")
     if not creator_name or not str(creator_name).strip():
-        raise ValueError("creator_name is required for a hybrid InstaBix + creator draft.")
+        raise ValueError("creator_name is required for a hybrid VistaBix + creator draft.")
 
     price = selected.get("price")
     if price not in ALLOWED_PRICES:
@@ -1565,7 +1565,7 @@ def build_draft(
         "price": int(price),
         "word_target": word_target,
         "creator_name": creator_name,
-        "co_branding": f"InstaBix x {creator_name}",
+        "co_branding": f"VistaBix x {creator_name}",
         "audience_angle": angle,
         "research_status": analysis["status"],
         "theme": theme,
@@ -1632,7 +1632,7 @@ def build_draft(
         "price": int(price),
         "price_label": f"${int(price)}",
         "creator_name": creator_name,
-        "co_branding": f"InstaBix x {creator_name}",
+        "co_branding": f"VistaBix x {creator_name}",
         "audience_angle": angle,
         "research_status": analysis["status"],
         "selected_concept_id": selected.get("id"),
@@ -1689,7 +1689,7 @@ def render_whop_markdown(draft: Mapping[str, Any]) -> str:
     lines = [
         f"# {doc.get('title', '')}",
         "",
-        f"**{doc.get('co_branding', 'InstaBix')}**",
+        f"**{doc.get('co_branding', 'VistaBix')}**",
         "",
         f"Promise: {doc.get('promise', '')}",
         f"Audience angle: {doc.get('audience_angle', 'Undetermined')}",

@@ -71,7 +71,7 @@ describe("optional credential env values", () => {
   it("enables email only with key, sender, domain and physical address", async () => {
     stubEnv({
       RESEND_API_KEY: "re_test",
-      OUTREACH_FROM: "InstaBix <hello@example.com>",
+      OUTREACH_FROM: "VistaBix <hello@example.com>",
       EMAIL_FROM_DOMAIN: "example.com",
     });
     vi.resetModules();
@@ -81,7 +81,7 @@ describe("optional credential env values", () => {
     vi.unstubAllEnvs();
     stubEnv({
       RESEND_API_KEY: "re_test",
-      OUTREACH_FROM: "InstaBix <hello@example.com>",
+      OUTREACH_FROM: "VistaBix <hello@example.com>",
       EMAIL_FROM_DOMAIN: "example.com",
       OUTREACH_PHYSICAL_ADDRESS: "1 Main Street, Test City",
     });

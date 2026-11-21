@@ -33,7 +33,7 @@ export async function sendEmail(input: {
   const unsubscribe = unsubscribeUrl(input.orgId, input.to);
   const address = env.OUTREACH_PHYSICAL_ADDRESS ?? "";
   const complianceLine =
-    "You are receiving this because you applied to partner with InstaBix or published a business contact for partnership enquiries.";
+    "You are receiving this because you applied to partner with VistaBix or published a business contact for partnership enquiries.";
   const textWithFooter = `${input.text.trimEnd()}\n\n—\n${complianceLine}\nUnsubscribe: ${unsubscribe}\n${address}`;
 
   const html = `<!doctype html><html><body style="margin:0;background:#f6f6f8;font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#16161d">

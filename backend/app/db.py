@@ -42,8 +42,8 @@ def init_db(engine: Engine) -> None:
 
 DEFAULT_SETTINGS: dict[str, object] = {
     "branding": "hybrid",
-    "sender_name": "The InstaBix team",
-    "support_email": "support@instabix.com",
+    "sender_name": "The VistaBix team",
+    "support_email": "support@vistabix.com",
     "outreach_paused": False,
 }
 

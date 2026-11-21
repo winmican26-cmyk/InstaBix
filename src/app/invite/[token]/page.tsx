@@ -28,7 +28,7 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
       <div className="mb-6 flex items-center gap-2.5">
         <Mark className="size-8" />
         <span className="leading-none">
-          <span className="block font-display text-[16px] font-semibold tracking-[-0.03em] text-fg">InstaBix</span>
+          <span className="block font-display text-[16px] font-semibold tracking-[-0.03em] text-fg">VistaBix</span>
           <span className="mt-1 block font-mono text-[9px] uppercase tracking-[0.16em] text-faint">Workspace invitation</span>
         </span>
       </div>

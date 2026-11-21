@@ -85,5 +85,5 @@ export async function GET(request: Request) {
     ]),
   );
 
-  return csvResponse(`instabix-creators-${new Date().toISOString().slice(0, 10)}.csv`, csv);
+  return csvResponse(`vistabix-creators-${new Date().toISOString().slice(0, 10)}.csv`, csv);
 }

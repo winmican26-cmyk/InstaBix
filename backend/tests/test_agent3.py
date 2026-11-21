@@ -293,7 +293,7 @@ def test_required_section_order_and_generated_draft_contract() -> None:
     assert tuple(section["name"] for section in draft["sections"]) == REQUIRED_SECTIONS
     assert draft["creator_approved"] is False
     assert draft["publishing"] == "never_auto_published"
-    assert "InstaBix" in draft["co_branding"]
+    assert "VistaBix" in draft["co_branding"]
     assert draft["creator_name"] in draft["co_branding"]
 
     reordered = {**draft, "sections": list(reversed(draft["sections"]))}
@@ -507,7 +507,7 @@ def test_generated_text_contains_no_legacy_brand() -> None:
         default=str,
     ).lower()
     assert legacy_brand.lower() not in generated
-    assert "instabix" in generated
+    assert "vistabix" in generated
 
 
 def test_architect_endpoints_are_narrow_and_gated(api: Any) -> None:

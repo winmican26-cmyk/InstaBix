@@ -1,4 +1,4 @@
-"""Database schema for the InstaBix API starter.
+"""Database schema for the VistaBix API starter.
 
 Six tables:
 

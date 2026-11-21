@@ -212,7 +212,7 @@ class OutreachCreate(BaseModel):
     creator_id: int = Field(gt=0)
     template_key: Literal["initial", "follow_up", "close_loop"] = "initial"
     campaign_id: int | None = Field(default=None, gt=0)
-    sender_name: str = Field(default="The InstaBix team", min_length=1, max_length=120)
+    sender_name: str = Field(default="The VistaBix team", min_length=1, max_length=120)
     custom_note: str | None = Field(default=None, max_length=500)
 
     @field_validator("template_key")
@@ -236,7 +236,7 @@ class OutreachSendRequest(BaseModel):
     creator_id: int = Field(gt=0)
     template_key: int | str = "initial"
     campaign_id: int | None = Field(default=None, gt=0)
-    sender_name: str = Field(default="The InstaBix team", min_length=1, max_length=120)
+    sender_name: str = Field(default="The VistaBix team", min_length=1, max_length=120)
     custom_note: str | None = Field(default=None, max_length=500)
 
     @field_validator("template_key", mode="before")

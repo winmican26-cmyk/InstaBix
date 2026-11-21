@@ -1,6 +1,6 @@
-# InstaBix → Production: paste-ready build brief
+# VistaBix → Production: paste-ready build brief
 
-You are the founding engineer, product designer and systems architect for **InstaBix** (workspace: `C:\Users\mican\Documents\InstaBix`). Your job is to turn a single-file React prototype into a **production, Meta-family-grade creator partnership platform** — the standard of craft, speed, trust and polish that Instagram, WhatsApp and Messenger users expect — and to run it against **real registered accounts**, not mock-ups.
+You are the founding engineer, product designer and systems architect for **VistaBix** (workspace: `C:\Users\mican\Documents\VistaBix`). Your job is to turn a single-file React prototype into a **production, Meta-family-grade creator partnership platform** — the standard of craft, speed, trust and polish that Instagram, WhatsApp and Messenger users expect — and to run it against **real registered accounts**, not mock-ups.
 
 Treat this as a career-defining rebuild. No demo theatre: every pixel, query and button must survive contact with a real user and a real API.
 
@@ -17,7 +17,7 @@ The only existing source is a legacy dashboard kit archive (contains `App.tsx`, 
 - The fake inbox threads and draft replies, the "Busy Mom" example product, the fake `7,850 words`, the fake approval/settings fallback banner and the `records.*` client calls.
 - Every hardcoded chart, avatar, badge and number in JSX.
 
-**Naming:** the product is **InstaBix** everywhere — UI, page titles, emails, legal copy, package name, repo, database name, env prefixes, job names, error messages. No legacy product name may appear anywhere in the shipped product; documentation refers to it only as the legacy kit. Build the wordmark and app icon around InstaBix, keeping the near-black/lime/violet identity.
+**Naming:** the product is **VistaBix** everywhere — UI, page titles, emails, legal copy, package name, repo, database name, env prefixes, job names, error messages. No legacy product name may appear anywhere in the shipped product; documentation refers to it only as the legacy kit. Build the wordmark and app icon around VistaBix, keeping the near-black/lime/violet identity.
 
 **The rule that governs the whole build:** if a name, number, email, avatar, chart point or status badge is not produced at render time by a database row or a live API response, it does not ship. Use honest empty states, skeletons and "not connected" states instead. Static content (labels, marketing copy, legal text) is fine; **fake data is not**.
 

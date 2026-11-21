@@ -1,4 +1,4 @@
-# InstaBix — Verification Evidence Package
+# VistaBix — Verification Evidence Package
 
 **Date:** 2026-11-18  
 **Time convention:** all events below occurred on 2026-11-18. Wall-clock times were not retained, so no times are invented.  
@@ -25,7 +25,7 @@
 ### 2.1 Backend producer re-gate
 
 ```powershell
-cd C:\Users\mican\Documents\InstaBix\backend
+cd C:\Users\mican\Documents\VistaBix\backend
 .\.venv\Scripts\python.exe -m pytest
 .\.venv\Scripts\python.exe -m compileall -q app tests
 ```
@@ -37,7 +37,7 @@ cd C:\Users\mican\Documents\InstaBix\backend
 ### 2.2 Backend independent judge
 
 ```powershell
-cd C:\Users\mican\Documents\InstaBix\backend
+cd C:\Users\mican\Documents\VistaBix\backend
 .\.venv\Scripts\python.exe -m pytest
 ```
 
@@ -49,7 +49,7 @@ cd C:\Users\mican\Documents\InstaBix\backend
 ### 2.3 Frontend producer re-gate
 
 ```powershell
-cd C:\Users\mican\Documents\InstaBix\frontend
+cd C:\Users\mican\Documents\VistaBix\frontend
 npm run typecheck
 npm run build
 ```
@@ -70,7 +70,7 @@ The producer smoke harness pointed `NEXT_PUBLIC_API_URL` at an unused port. The 
 The judge re-ran:
 
 ```powershell
-cd C:\Users\mican\Documents\InstaBix\frontend
+cd C:\Users\mican\Documents\VistaBix\frontend
 npm run typecheck
 npm run build
 ```
@@ -91,7 +91,7 @@ Additional verified findings:
 Initial failure:
 
 ```powershell
-cd C:\Users\mican\Documents\InstaBix
+cd C:\Users\mican\Documents\VistaBix
 npm run verify
 ```
 
@@ -106,7 +106,7 @@ Fixes, each bounded:
 Final re-run:
 
 ```powershell
-cd C:\Users\mican\Documents\InstaBix
+cd C:\Users\mican\Documents\VistaBix
 npm run verify
 ```
 
@@ -135,15 +135,15 @@ rg -n -i $FORBIDDEN_BRAND frontend --glob '!node_modules/**' --glob '!.next/**'
 ### 2.8 Git and ignore hygiene
 
 ```powershell
-cd C:\Users\mican\Documents\InstaBix
+cd C:\Users\mican\Documents\VistaBix
 git status --short --branch
 git remote -v
-git check-ignore -v backend/.venv backend/instabix.db backend/__pycache__ reference/kit/App.tsx
+git check-ignore -v backend/.venv backend/vistabix.db backend/__pycache__ reference/kit/App.tsx
 ```
 
 - Documentation-time working tree: uncommitted on `main`; no remote was configured.
-- Post-push state: clean `main` tracking `origin/main` at `9d74ad8`; remote `origin` is `https://github.com/winmican26-cmyk/InstaBix.git`.
-- Ignore check: `backend/.venv`, `backend/instabix.db`, `backend/__pycache__`, and `reference/kit/App.tsx` all confirmed ignored.
+- Post-push state: clean `main` tracking `origin/main` at `9d74ad8`; remote `origin` is `https://github.com/winmican26-cmyk/VistaBix.git`.
+- Ignore check: `backend/.venv`, `backend/vistabix.db`, `backend/__pycache__`, and `reference/kit/App.tsx` all confirmed ignored.
 - `.gitignore` covers `node_modules`, `.next`, `.venv`, `__pycache__`, `*.pyc`, `*.db`, `.env` variants, `reference/`, and generated output paths.
 
 ### 2.9 Independent docs judge
@@ -217,13 +217,13 @@ Exact combined gate outputs on 2026-11-19:
 
 ```text
 npm run verify
-> instabix@0.1.0 typecheck   (tsc --noEmit, clean)
-> instabix@0.1.0 lint        (eslint ., clean)
-> instabix@0.1.0 test
+> vistabix@0.1.0 typecheck   (tsc --noEmit, clean)
+> vistabix@0.1.0 lint        (eslint ., clean)
+> vistabix@0.1.0 test
  Test Files  5 passed (5)
       Tests  52 passed (52)
 
-> instabix@0.1.0 build
+> vistabix@0.1.0 build
 ✓ Compiled successfully in 2.8s
 ✓ Generating static pages using 15 workers (10/10) in 421ms
 
@@ -278,7 +278,7 @@ Final publish-path judge runtime probes: `POST /api/whop/publish count = 1` (onl
 
 ### Producer/judge evidence
 
-- STAGE2-SCHEMA runtime CHECK dump (from `Base.metadata`, mirrored in real Postgres): `ck_products_split_bps_sum => split_creator_bps + split_platform_bps = 10000`; `ck_products_split_mirror_sum => split_creator + split_operator = 1.00`; `ck_products_branding => branding IN ('hybrid','creator_only','instabix_only')`; `ck_creators_niche` with the 6 spec values; `ck_creators_status` with the 7 title-case values; `ck_products_status` with the 6 spec values; `ck_campaigns_current_step` and `ck_emails_step` in 1..3.
+- STAGE2-SCHEMA runtime CHECK dump (from `Base.metadata`, mirrored in real Postgres): `ck_products_split_bps_sum => split_creator_bps + split_platform_bps = 10000`; `ck_products_split_mirror_sum => split_creator + split_operator = 1.00`; `ck_products_branding => branding IN ('hybrid','creator_only','vistabix_only')`; `ck_creators_niche` with the 6 spec values; `ck_creators_status` with the 7 title-case values; `ck_products_status` with the 6 spec values; `ck_campaigns_current_step` and `ck_emails_step` in 1..3.
 - JSONB variant runtime check: `SQLite JSON type: JSON` / `Postgres JSON type: JSONB`.
 - Publish gate: `validate_publishable` is called in `main.py.publish_stage2`, so the 409 body keeps `details.reasons` (`test_agent4.py:47` passes). A creator-approved boolean with `status="draft"` is still blocked. `agent4.py` now writes `status="live"` directly; the former `before_flush` rewrite and shadowed `/api/whop/publish` route were removed. Only one publish route remains.
 
@@ -324,10 +324,10 @@ backend: .\.venv\Scripts\python.exe -m compileall -q app tests
 compileall_exit=0
 
 root: npm run verify
-> instabix@0.1.0 typecheck   (clean)
-> instabix@0.1.0 lint        (clean)
-> instabix@0.1.0 test        (5 files passed, 52 tests passed)
-> instabix@0.1.0 build       (production build succeeded)
+> vistabix@0.1.0 typecheck   (clean)
+> vistabix@0.1.0 lint        (clean)
+> vistabix@0.1.0 test        (5 files passed, 52 tests passed)
+> vistabix@0.1.0 build       (production build succeeded)
 
 frontend: npm run typecheck  (clean)
 frontend: npm run build      (compiled successfully)
@@ -445,7 +445,7 @@ D18 in `DECISIONS.md` records the interpretation. The pasted blocks 5–6 were t
 | `backend/migrations/001_initial.sql` | `backend/migrations/0001_stage2.sql` is already the full six-table DDL | No duplicate created |
 | `backend/app/{main,models,schemas,whop}.py`, `agents/agent1-4.py` | Present and production-grade; reference snippets are toy versions | Not replaced |
 | `routers/{scout,outreach,products,revenue,settings}.py` | Routes live in the single accepted `main.py` registration point; `routers/whop.py` holds the audit endpoint | Deferred as a no-op refactor |
-| `postman/` collection, environment, README | Missing | **Added** as InstaBix-branded files |
+| `postman/` collection, environment, README | Missing | **Added** as VistaBix-branded files |
 
 Validation:
 
@@ -490,7 +490,7 @@ D20 in `DECISIONS.md` records the verdict. The pasted blocks 8–9 were treated 
 
 | Pasted item | Verdict | Shipped evidence |
 | --- | --- | --- |
-| Reference package name, Next 14.2.0 / React 18.3.1, port 3000 | Rejected | `frontend/package.json:2,7-15` — InstaBix name, Next 16.4.6, React 19.3.1, port 3100, typecheck script |
+| Reference package name, Next 14.2.0 / React 18.3.1, port 3000 | Rejected | `frontend/package.json:2,7-15` — VistaBix name, Next 16.4.6, React 19.3.1, port 3100, typecheck script |
 | Toy page shell with three fetch comments | Superseded | `frontend/app/page.tsx:10-323` fetches health/scout/outreach/products/whop/revenue/settings in parallel; `Unreachable` guard at 325-342; empty states; no sample figures |
 | `001_initial.sql` + `psql -f` runner | Aliased | `backend/migrations/0001_stage2.sql` is documentation DDL; `backend/app/migrate.py:1-8` applies idempotent additive migrations at runtime |
 | Table set (six tables + settings) | Present | `0001_stage2.sql:8,52,70,116,141,173` — creators, campaigns, products, emails, sales, settings; indexes and CHECK constraints throughout |
@@ -546,7 +546,7 @@ D22 in `DECISIONS.md` records the verdict. Blocks 10–12 were treated as stale 
 
 | Pasted item | Verdict | Shipped evidence |
 | --- | --- | --- |
-| Legacy-branded Postman filenames and `base_url` | Rejected | `postman/README.md:5-14` names `Instabix.postman_collection.json` / `Instabix.postman_environment.json`, uses `baseUrl`, and documents the 13-request order; `postman/Instabix.postman_environment.json:4-9` sets `baseUrl=http://localhost:8000` with empty `apiKey` and no secret |
+| Legacy-branded Postman filenames and `base_url` | Rejected | `postman/README.md:5-14` names `Vistabix.postman_collection.json` / `Vistabix.postman_environment.json`, uses `baseUrl`, and documents the 13-request order; `postman/Vistabix.postman_environment.json:4-9` sets `baseUrl=http://localhost:8000` with empty `apiKey` and no secret |
 | Claimed 14-request run with repeated scout/classify/publish variants | Superseded | A JSON parse of the shipped collection returned 13 requests; `TRACEABILITY.md:92-106` maps exactly the 13 D17 paths, including creator approval/list and the 501 webhook stub that the pasted run omits |
 | Postman safety notes | Present | `postman/README.md:20-23` — draft-only outreach, server-derived split ordinal, no fabricated URL in mock mode, webhook 501, no credentials in the collection |
 | `WHOP_COMPANY_ID`, `OPENAI_API_KEY`, `EMAIL_FROM_NAME` | Rejected | `backend/.env.example:22-37` and `backend/app/config.py:72-77` use `EMAIL_FROM_DOMAIN`, `WHOP_API_KEY`, `WHOP_ACCOUNT_ID` and the `/api/v1` base; `README.md:139,146-163` maps `ANTHROPIC_API_KEY` and the complete backend env contract |
@@ -579,7 +579,7 @@ This closes the user's final request: click every visible control, then finish w
 
 ### 15.1 Runtime restoration
 
-- Docker Desktop was restarted; `instabix-postgres` was started on `0.0.0.0:55432->5432/tcp` and reconnected with the app role (34 public tables).
+- Docker Desktop was restarted; `vistabix-postgres` was started on `0.0.0.0:55432->5432/tcp` and reconnected with the app role (34 public tables).
 - Backend: `uvicorn app.main:app --host 127.0.0.1 --port 8000`; `GET /health` returned HTTP 200 with `database:"ok"`, `whop.mode:"mock"`, `configured:false`.
 - Root app: `npm run dev`; `GET /api/health` returned HTTP 200 with `database:"reachable"`.
 - Login rate-limit rows were cleared before each E2E run so the single global login would not inherit earlier failed attempts.

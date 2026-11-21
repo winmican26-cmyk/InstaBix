@@ -67,7 +67,7 @@ export default async function PublicProductPage({
         <div className="flex items-center gap-2.5">
           <Mark className="size-8" />
           <span className="leading-none">
-            <span className="block font-display text-[16px] font-semibold tracking-[-0.03em] text-fg">InstaBix</span>
+            <span className="block font-display text-[16px] font-semibold tracking-[-0.03em] text-fg">VistaBix</span>
             <span className="mt-1 block font-mono text-[9px] uppercase tracking-[0.16em] text-faint">{org?.name ?? "Storefront"}</span>
           </span>
         </div>
@@ -168,7 +168,7 @@ export default async function PublicProductPage({
                   settled sale.
                 </li>
                 <li className="flex items-start gap-1.5">
-                  <ShieldCheck className="mt-0.5 size-3 shrink-0 text-lime" aria-hidden /> Payment runs through Stripe. InstaBix
+                  <ShieldCheck className="mt-0.5 size-3 shrink-0 text-lime" aria-hidden /> Payment runs through Stripe. VistaBix
                   never sees card details.
                 </li>
               </ul>
@@ -197,7 +197,7 @@ export default async function PublicProductPage({
 
       <footer className="mt-10 border-t border-line pt-5 text-[11px] leading-5 text-faint">
         <p>
-          Sold by {org?.name ?? "the workspace"} through InstaBix. Refunds follow the published policy; a refund reverses the
+          Sold by {org?.name ?? "the workspace"} through VistaBix. Refunds follow the published policy; a refund reverses the
           creator and operator ledger lines exactly.
         </p>
       </footer>

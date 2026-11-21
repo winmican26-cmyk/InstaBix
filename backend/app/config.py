@@ -25,7 +25,7 @@ BRANDING = "hybrid"
 
 # Stage 2 schema vocabularies. ``BRANDING`` above stays locked to "hybrid";
 # these tuples describe the allowed per-product / per-creator field values.
-PRODUCT_BRANDING: tuple[str, ...] = ("hybrid", "creator_only", "instabix_only")
+PRODUCT_BRANDING: tuple[str, ...] = ("hybrid", "creator_only", "vistabix_only")
 CREATOR_STATUSES: tuple[str, ...] = (
     "New",
     "Qualified",
@@ -54,11 +54,11 @@ class Settings(BaseSettings):
         case_sensitive=False,
     )
 
-    app_name: str = "InstaBix API"
+    app_name: str = "VistaBix API"
     app_env: str = "development"
     app_version: str = "0.1.0"
 
-    database_url: str = "sqlite:///./instabix.db"
+    database_url: str = "sqlite:///./vistabix.db"
     api_key: str | None = None
 
     cors_origins: str = "http://localhost:3100,http://127.0.0.1:3100"

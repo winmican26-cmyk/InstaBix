@@ -24,7 +24,7 @@ from app.errors import PublishBlocked
 from app.models import Product, utcnow
 from app.whop import WhopClient, WhopPublishResult
 
-DISCLOSURE = "Paid partnership with InstaBix. #ad"
+DISCLOSURE = "Paid partnership with VistaBix. #ad"
 
 # Official Instagram Graph API surface only. No scraping, no unofficial hosts.
 OFFICIAL_IG_GRAPH_BASE = "https://graph.facebook.com"
@@ -307,11 +307,11 @@ def build_launch_captions(product: Product, bio_link: str) -> list[dict[str, Any
             "id": "value_first",
             "hook": f"If {audience} want one place to start, start here.",
             "body": (
-                f"{product.title} is {promise}. I built it with InstaBix and approved the "
+                f"{product.title} is {promise}. I built it with VistaBix and approved the "
                 f"outline before it went live. {price}. Link in bio."
             ),
             "cta": "Read the chapter list, then decide.",
-            "hashtags": ["#ad", "#instabix", f"#{product.niche.split()[0].lower()}"],
+            "hashtags": ["#ad", "#vistabix", f"#{product.niche.split()[0].lower()}"],
             "link": bio_link,
             "disclosure": DISCLOSURE,
         },
@@ -324,7 +324,7 @@ def build_launch_captions(product: Product, bio_link: str) -> list[dict[str, Any
                 f"That became {product.title}. {price}. Link in bio."
             ),
             "cta": "Questions? Reply to this post.",
-            "hashtags": ["#ad", "#instabix", "#buildinpublic"],
+            "hashtags": ["#ad", "#vistabix", "#buildinpublic"],
             "link": bio_link,
             "disclosure": DISCLOSURE,
         },
@@ -337,7 +337,7 @@ def build_launch_captions(product: Product, bio_link: str) -> list[dict[str, Any
                 f"I reviewed and approved every chapter. {price}."
             ),
             "cta": f"Get it here: {bio_link}",
-            "hashtags": ["#ad", "#instabix"],
+            "hashtags": ["#ad", "#vistabix"],
             "link": bio_link,
             "disclosure": DISCLOSURE,
         },
@@ -560,7 +560,7 @@ def publish_product(db: Session, product: Product, client: WhopClient) -> Publis
         price_cents=product.price_cents,
         metadata={
             "branding": BRANDING,
-            "instabix_product_id": str(product.id),
+            "vistabix_product_id": str(product.id),
             "creator_id": str(product.creator_id),
             "niche": product.niche,
         },

@@ -1,4 +1,4 @@
-# InstaBix — Screen-to-Source Traceability
+# VistaBix — Screen-to-Source Traceability
 
 **Date:** 2026-11-18  
 **Rule:** every name, number, and status shown in the product must resolve to a database row, a real API response, or explicitly static copy. This matrix records where each surface obtains its data.
@@ -13,7 +13,7 @@ The page is an async Server Component (`frontend/app/page.tsx`) with `dynamic = 
 | Creator pipeline | `GET /api/scout` | `creators.count`, `qualified`, `status`, `niche`, `name`, `handle`, `created_at` | `creatorAccounts`, `creatorSnapshots`, `scores` via `getDashboard()` / `listCreators()` | Backend unit tests passed; judge confirmed rendered numbers derive from response fields |
 | Outreach queue | `GET /api/outreach` | `emails.count`, `status`, `approved`, `subject`, `creator_name` | `messages`, `sequences`, `sequenceSteps`, `creatorAccounts` via `getOutreach()` | Backend approval/classify tests passed; frontend structural per-card failure states confirmed |
 | Products | `GET /api/products` | `products.title`, `status`, `slug`, `split.creator_share`, `split.platform_share` | `products`, `chapters`, `drafts`, `creatorAccounts` via `listProducts()` / `getProductDetail()` | Backend product/TOC and split tests passed; frontend build passed |
-| Revenue | `GET /api/revenue` | `sales` aggregates: `sales_count`, `gross_cents`, `refunded_cents`, `net_cents`, `creator_cents`, `instabix_cents`; recent items | `ledgerEntries`, `orders`, `statements`, `creatorAccounts` via `getRevenue()` | Backend payout/refund tests passed; root Vitest `10 passed` |
+| Revenue | `GET /api/revenue` | `sales` aggregates: `sales_count`, `gross_cents`, `refunded_cents`, `net_cents`, `creator_cents`, `vistabix_cents`; recent items | `ledgerEntries`, `orders`, `statements`, `creatorAccounts` via `getRevenue()` | Backend payout/refund tests passed; root Vitest `10 passed` |
 | Whop status | `GET /api/whop` | `WhopClient.status()` fields `mode`, `configured`, `mock`, `publish_ready`, `account_id`, `api_base`, `api_version_date`, `note`, plus route-added `branding` and `publish_endpoint`; no credentials are rendered | `integrations` via `getIntegrations()`; not runtime-tested this session | Backend Whop tests passed; no live publish performed |
 | Settings & locked rules | `GET /api/settings` | `settings.key/value` plus server config `BRANDING`, `NICHES`, `_split_payload()` | `memberships`, `users`, `invites` via `getSettings()` - different root settings surface | Frontend judge confirmed no hard-coded split/branding; `PUT` rejects non-`hybrid` branding |
 
@@ -81,7 +81,7 @@ The Stage 2 schema is authoritative in the FastAPI backend. `src/lib/db/schema.t
 | `sales` | `Sale` / `sales` | decimal `amount` / `payout_creator` / `payout_operator` mirrors, `whop_order_id`, `sold_at` | `orders` + `refunds` + `ledgerEntries` + `statements` |
 | `settings` | `Setting` / `settings` | `id`, unique `key`, JSONB value; legacy `app_settings` copied forward and left intact | `featureFlags` + `rateLimits` + `orgs.settings` |
 
-Authoritative vs mirror columns: basis points (`split_creator_bps` = 6000/5000, `split_platform_bps` = 4000/5000) and integer cents (`price_cents`, `gross_cents`, `creator_cents`, `platform_cents`) drive all arithmetic. The Stage 2 decimal columns are persisted mirrors with CHECK constraints (`= 10000` bps, `= 1.00` decimals). The operator-only branding value is `instabix_only`; the global `/api/settings` branding value stays locked to `hybrid`.
+Authoritative vs mirror columns: basis points (`split_creator_bps` = 6000/5000, `split_platform_bps` = 4000/5000) and integer cents (`price_cents`, `gross_cents`, `creator_cents`, `platform_cents`) drive all arithmetic. The Stage 2 decimal columns are persisted mirrors with CHECK constraints (`= 10000` bps, `= 1.00` decimals). The operator-only branding value is `vistabix_only`; the global `/api/settings` branding value stays locked to `hybrid`.
 
 Migration evidence: `backend/app/migrate.py` is additive and idempotent; `backend/migrations/0001_stage2.sql` is the readable Postgres target DDL. Both fresh and legacy-upgrade paths were executed against a real Postgres instance on 2026-11-19 (see `EVIDENCE.md` section 7).
 
@@ -127,7 +127,7 @@ The pasted frontend starter and SQL migration are legacy reference. D20 in `DECI
 
 | Reference | Shipped counterpart |
 | --- | --- |
-| Reference package name / Next 14 / React 18 / port 3000 | `frontend/package.json:2,7-15` — InstaBix name, Next 16.4.6, React 19.3.1, port 3100 |
+| Reference package name / Next 14 / React 18 / port 3000 | `frontend/package.json:2,7-15` — VistaBix name, Next 16.4.6, React 19.3.1, port 3100 |
 | Toy page (three fetch comments) | `frontend/app/page.tsx` — seven parallel API calls, unreachable guard, no sample figures |
 | `001_initial.sql` + `psql -f` | `backend/migrations/0001_stage2.sql` (docs DDL) + `backend/app/migrate.py` (runtime additive runner) |
 | Six tables including settings | `0001_stage2.sql:8,52,70,116,141,173` — same table set with indexes and CHECKs |
@@ -158,7 +158,7 @@ D22 in `DECISIONS.md` records the verdict; `EVIDENCE.md` section 14 holds the ex
 
 | Pasted item | Shipped counterpart / contract |
 | --- | --- |
-| Legacy-branded collection files, `base_url`, 14-line run | `postman/Instabix.postman_collection.json`, `postman/Instabix.postman_environment.json`, `postman/README.md` — `baseUrl`, 13 requests mapped once each in section 7; no credentials |
+| Legacy-branded collection files, `base_url`, 14-line run | `postman/Vistabix.postman_collection.json`, `postman/Vistabix.postman_environment.json`, `postman/README.md` — `baseUrl`, 13 requests mapped once each in section 7; no credentials |
 | Scout/classify variants and two publish variants | One `POST /api/scout/search`, one `POST /api/outreach/classify`, one `POST /api/whop/publish`; route details in section 7 |
 | `WHOP_COMPANY_ID` / `OPENAI_API_KEY` / `EMAIL_FROM_NAME` | `WHOP_ACCOUNT_ID` / `ANTHROPIC_API_KEY` / `EMAIL_FROM_DOMAIN` in `backend/.env.example`, `backend/app/config.py` and `README.md` section 5 |
 | `001_initial.sql` via `psql -f` | `backend/migrations/0001_stage2.sql` (documentation DDL) plus `backend/app/migrate.py` (runtime additive runner) |

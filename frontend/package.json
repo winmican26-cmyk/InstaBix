@@ -1,8 +1,8 @@
 {
-  "name": "instabix-frontend",
+  "name": "vistabix-frontend",
   "version": "0.1.0",
   "private": true,
-  "description": "InstaBix operator dashboard starter backed by the FastAPI service.",
+  "description": "VistaBix operator dashboard starter backed by the FastAPI service.",
   "scripts": {
     "dev": "next dev -p 3100",
     "build": "node scripts/build.mjs",

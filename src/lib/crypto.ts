@@ -15,7 +15,7 @@ function encryptionKey(): Buffer {
     }
   } else {
     // Development-only derivation. Production requires an explicit key (env.ts enforces it).
-    key = Buffer.from(hkdfSync("sha256", env.AUTH_SECRET, "instabix", "token-encryption-v1", 32));
+    key = Buffer.from(hkdfSync("sha256", env.AUTH_SECRET, "vistabix", "token-encryption-v1", 32));
   }
   keyCache.set("v1", key);
   return key;

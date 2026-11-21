@@ -5,7 +5,7 @@ import { hashPassword } from "../src/lib/auth/password";
 config({ path: ".env.local" });
 config();
 
-const email = (process.env.SEED_EMAIL ?? "owner@instabix.local").toLowerCase();
+const email = (process.env.SEED_EMAIL ?? "owner@vistabix.local").toLowerCase();
 const password = process.env.SEED_PASSWORD ?? "";
 
 async function main() {
@@ -16,7 +16,7 @@ async function main() {
     throw new Error("SEED_PASSWORD must be at least 12 characters.");
   }
 
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL_ADMIN, application_name: "instabix-seed" });
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL_ADMIN, application_name: "vistabix-seed" });
   const client = await pool.connect();
   try {
     await client.query("begin");
@@ -37,16 +37,16 @@ async function main() {
     }
 
     let orgId: string;
-    const existingOrg = await client.query("select id from orgs where slug = 'instabix-hq'");
+    const existingOrg = await client.query("select id from orgs where slug = 'vistabix-hq'");
     if (existingOrg.rowCount) {
       orgId = existingOrg.rows[0].id;
     } else {
       const inserted = await client.query(
-        "insert into orgs (name, slug, settings) values ('InstaBix HQ', 'instabix-hq', $1) returning id",
+        "insert into orgs (name, slug, settings) values ('VistaBix HQ', 'vistabix-hq', $1) returning id",
         [JSON.stringify({ onboardingComplete: false, defaultSplitCreatorBps: 6000 })],
       );
       orgId = inserted.rows[0].id;
-      console.log("• created organisation: InstaBix HQ");
+      console.log("• created organisation: VistaBix HQ");
     }
 
     await client.query(

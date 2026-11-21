@@ -20,7 +20,7 @@ export default function ForCreatorsPage() {
           You should own the answer.
         </h1>
         <p className="mt-5 text-[14px] leading-7 text-muted">
-          InstaBix partners with creators who have real demand and no product to sell it. We research, write, design and
+          VistaBix partners with creators who have real demand and no product to sell it. We research, write, design and
           operate the product. You review it, put your name on it, and earn the majority of every sale.
         </p>
         <div className="mt-8 flex flex-wrap gap-3">

@@ -84,11 +84,11 @@ export default async function Page() {
               IB
             </span>
             <div>
-              <p className="eyebrow">InstaBix</p>
+              <p className="eyebrow">VistaBix</p>
               <span className="brand-name">Operator Dashboard</span>
             </div>
           </div>
-          <p className="topbar-note">Live data from the InstaBix API · no sample figures</p>
+          <p className="topbar-note">Live data from the VistaBix API · no sample figures</p>
         </div>
       </header>
 
@@ -216,7 +216,7 @@ export default async function Page() {
                       <strong>{text(product.title)}</strong>
                       <span className="muted">
                         {text(product.status)} · creator {share(product.split?.creator_share)} ·
-                        InstaBix {share(product.split?.platform_share)}
+                        VistaBix {share(product.split?.platform_share)}
                       </span>
                     </li>
                   ))}
@@ -243,7 +243,7 @@ export default async function Page() {
                   <Row label="Refunded" value={cents(summary.refunded_cents)} />
                   <Row label="Net" value={cents(summary.net_cents)} />
                   <Row label="Creator" value={cents(summary.creator_cents)} />
-                  <Row label="InstaBix" value={cents(summary.instabix_cents)} />
+                  <Row label="VistaBix" value={cents(summary.vistabix_cents)} />
                 </dl>
                 <h3>Recent sales</h3>
                 {sales === null ? (
@@ -314,8 +314,8 @@ export default async function Page() {
         </div>
 
         <footer>
-          <span>InstaBix · creator partnership operations</span>
-          <span>All values above are served by the InstaBix API.</span>
+          <span>VistaBix · creator partnership operations</span>
+          <span>All values above are served by the VistaBix API.</span>
         </footer>
       </main>
     </>
@@ -326,10 +326,10 @@ function Unreachable() {
   return (
     <main className="shell" id="main-content">
       <section className="panel panel-alert" role="alert" aria-labelledby="unreachable-title">
-        <p className="eyebrow">InstaBix</p>
+        <p className="eyebrow">VistaBix</p>
         <h1 id="unreachable-title">Backend unreachable</h1>
         <p>
-          No data could be loaded from the InstaBix API, so no figures are shown on
+          No data could be loaded from the VistaBix API, so no figures are shown on
           this page.
         </p>
         <p>
@@ -385,14 +385,14 @@ function SplitRows({ splits }: { splits?: SplitRules | null }) {
   return (
     <dl className="kv">
       <Row label="First product · creator" value={share(splits.first_product?.creator)} />
-      <Row label="First product · InstaBix" value={share(splits.first_product?.instabix)} />
+      <Row label="First product · VistaBix" value={share(splits.first_product?.vistabix)} />
       <Row
         label="Later products · creator"
         value={share(splits.subsequent_products?.creator)}
       />
       <Row
-        label="Later products · InstaBix"
-        value={share(splits.subsequent_products?.instabix)}
+        label="Later products · VistaBix"
+        value={share(splits.subsequent_products?.vistabix)}
       />
       <Row label="Unit" value={text(splits.unit)} />
     </dl>

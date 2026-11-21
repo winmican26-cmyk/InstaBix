@@ -1,4 +1,4 @@
-export const APP_NAME = "InstaBix";
+export const APP_NAME = "VistaBix";
 export const APP_TAGLINE = "The creator partnership engine";
 
 export type NavItem = { href: string; label: string; icon: string; badge?: "approvals" };
@@ -116,7 +116,7 @@ export const PROVIDERS = {
   },
   stripe: {
     name: "Payments · Stripe",
-    description: "Stripe Connect handles creator onboarding, checkout, refunds and payouts. The split ledger stays in InstaBix.",
+    description: "Stripe Connect handles creator onboarding, checkout, refunds and payouts. The split ledger stays in VistaBix.",
     docs: "https://docs.stripe.com/connect",
     limitations: "Creators must complete Stripe onboarding before they can be paid.",
   },

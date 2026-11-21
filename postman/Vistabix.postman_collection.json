@@ -1,6 +1,6 @@
 {
   "info": {
-    "name": "InstaBix API",
+    "name": "VistaBix API",
     "description": "Stage 1-3 FastAPI surface at http://localhost:8000. All writes preserve human approval gates; drafts are never auto-sent. The Whop webhook is an intentional 501 (Next) stub.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
@@ -94,7 +94,7 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"creator_id\": 1,\n  \"template_key\": 1,\n  \"sender_name\": \"The InstaBix team\"\n}",
+              "raw": "{\n  \"creator_id\": 1,\n  \"template_key\": 1,\n  \"sender_name\": \"The VistaBix team\"\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": { "raw": "{{baseUrl}}/api/outreach/send", "host": ["{{baseUrl}}"], "path": ["api", "outreach", "send"] },

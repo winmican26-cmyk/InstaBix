@@ -16,11 +16,11 @@ function page(input: { title: string; body: string; token?: string; confirm?: bo
          </button>
        </form>`
     : "";
-  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${input.title} · InstaBix</title></head>
+  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${input.title} · VistaBix</title></head>
   <body style="margin:0;background:#f6f6f8;font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#16161d">
     <main style="max-width:520px;margin:0 auto;padding:64px 20px">
       <div style="background:#fff;border:1px solid #e6e6ee;border-radius:14px;padding:28px">
-        <p style="margin:0 0 6px;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#77778a">InstaBix · email preferences</p>
+        <p style="margin:0 0 6px;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#77778a">VistaBix · email preferences</p>
         <h1 style="margin:0 0 12px;font-size:22px;letter-spacing:-.02em">${input.title}</h1>
         <p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:#55556a">${input.body}</p>
         ${action}

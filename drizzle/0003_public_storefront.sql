@@ -29,4 +29,4 @@ as $$
 $$;
 
 revoke all on function instagram_org_ids(text) from public;
-grant execute on function instagram_org_ids(text) to instabix_app;
+grant execute on function instagram_org_ids(text) to vistabix_app;

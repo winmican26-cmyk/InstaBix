@@ -17,7 +17,7 @@ if (!url.startsWith("postgres")) {
 }
 
 async function main() {
-  const client = new Client({ connectionString: url, application_name: "instabix-migrate" });
+  const client = new Client({ connectionString: url, application_name: "vistabix-migrate" });
   await client.connect();
   await client.query(`
     create table if not exists schema_migrations (

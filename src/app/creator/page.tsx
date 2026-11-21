@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Creator portal",
-  description: "Your InstaBix application status and consent record.",
+  description: "Your VistaBix application status and consent record.",
 };
 
 export default async function CreatorPortalPage() {
@@ -36,7 +36,7 @@ export default async function CreatorPortalPage() {
         <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-5 sm:px-6">
           <div className="inline-flex items-center gap-2.5">
             <Mark className="size-8" />
-            <span className="font-display text-[16px] font-semibold tracking-[-0.03em] text-fg">InstaBix</span>
+            <span className="font-display text-[16px] font-semibold tracking-[-0.03em] text-fg">VistaBix</span>
             <span className="ml-2 rounded border border-line px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.14em] text-muted">
               Creator portal
             </span>

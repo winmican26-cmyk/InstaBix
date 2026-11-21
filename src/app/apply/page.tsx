@@ -16,7 +16,7 @@ export default function ApplyPage() {
         <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-5 sm:px-6">
           <Link href="/" className="inline-flex items-center gap-2.5">
             <Mark className="size-8" />
-            <span className="font-display text-[16px] font-semibold tracking-[-0.03em] text-fg">InstaBix</span>
+            <span className="font-display text-[16px] font-semibold tracking-[-0.03em] text-fg">VistaBix</span>
           </Link>
           <Link href="/" className="inline-flex items-center gap-1.5 text-[12px] text-faint hover:text-muted">
             <ArrowLeft className="size-3.5" /> Back to site
@@ -53,7 +53,7 @@ export default function ApplyPage() {
             })}
           </div>
           <p className="mt-7 rounded-lg border border-line bg-surface-2/40 p-3.5 text-[11.5px] leading-5 text-faint">
-            InstaBix is not affiliated with Meta. Applying does not authorise us to message your audience, post on your
+            VistaBix is not affiliated with Meta. Applying does not authorise us to message your audience, post on your
             behalf, or access private messages.
           </p>
         </div>

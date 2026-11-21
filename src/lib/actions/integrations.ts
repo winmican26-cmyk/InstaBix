@@ -93,7 +93,7 @@ export async function sendTestEmailAction(): Promise<IntegrationState> {
   const result = await sendEmail({
     orgId: org.id,
     to: user.email,
-    subject: "InstaBix delivery check",
+    subject: "VistaBix delivery check",
     text: `This is a delivery check from ${org.name}.\n\nIf you can read this, Resend accepted the message and your domain authentication is working. Unsubscribe links in real outreach are signed per recipient.\n\nRequested by ${user.name}.`,
     idempotencyKey: `test:${org.id}:${Date.now()}`,
   });

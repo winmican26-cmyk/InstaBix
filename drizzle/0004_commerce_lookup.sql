@@ -20,5 +20,5 @@ $$;
 
 revoke all on function order_org_for_session(text) from public;
 revoke all on function order_org_for_payment_intent(text) from public;
-grant execute on function order_org_for_session(text) to instabix_app;
-grant execute on function order_org_for_payment_intent(text) to instabix_app;
+grant execute on function order_org_for_session(text) to vistabix_app;
+grant execute on function order_org_for_payment_intent(text) to vistabix_app;

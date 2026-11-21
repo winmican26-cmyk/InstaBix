@@ -1,4 +1,4 @@
-/** Shapes returned by the InstaBix FastAPI service. Fields are optional so a
+/** Shapes returned by the VistaBix FastAPI service. Fields are optional so a
  * changed backend response degrades to an explicit state instead of a crash. */
 
 export type ApiResult<T> =
@@ -7,7 +7,7 @@ export type ApiResult<T> =
 
 export interface SplitShare {
   creator?: number;
-  instabix?: number;
+  vistabix?: number;
 }
 
 export interface SplitRules {
@@ -109,7 +109,7 @@ export interface RevenueSummary {
   refunded_cents?: number;
   net_cents?: number;
   creator_cents?: number;
-  instabix_cents?: number;
+  vistabix_cents?: number;
 }
 
 export interface RevenueResponse {

@@ -18,7 +18,7 @@ from app.agents.agent2 import (
 )
 
 CREATOR = {"name": "Jordan Reyes", "niche": "Finance", "handle": "jordan"}
-UNSUBSCRIBE_URL = "https://instabix.com/unsubscribe?email=x"
+UNSUBSCRIBE_URL = "https://vistabix.com/unsubscribe?email=x"
 SOCIAL_PROOF = (
     "We did this for a creator in a similar niche and it sold from their existing audience in week 1."
 )
@@ -28,7 +28,7 @@ CLOSE_LOOP_BODY = (
 
 
 def render(key: str, **kwargs: object) -> dict[str, str]:
-    return render_outreach(CREATOR, key, sender_name="InstaBix", unsubscribe_url=UNSUBSCRIBE_URL, **kwargs)
+    return render_outreach(CREATOR, key, sender_name="VistaBix", unsubscribe_url=UNSUBSCRIBE_URL, **kwargs)
 
 
 @pytest.mark.parametrize(

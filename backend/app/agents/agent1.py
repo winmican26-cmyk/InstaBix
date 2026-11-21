@@ -316,7 +316,7 @@ def qualify_creator(
         niche_ok = niche in NICHES
         checks["niche_supported"] = niche_ok
         if not niche_ok:
-            reasons.append(f"Niche '{niche}' is not one of the supported InstaBix niches.")
+            reasons.append(f"Niche '{niche}' is not one of the supported VistaBix niches.")
 
     hard_failures = (
         not follower_ok

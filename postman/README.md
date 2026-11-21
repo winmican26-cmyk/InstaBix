@@ -1,16 +1,16 @@
-# InstaBix Postman collection
+# VistaBix Postman collection
 
 Local, credential-free requests for the FastAPI service at `http://localhost:8000`.
 
 ## Files
 
-- `Instabix.postman_collection.json` — all 13 Stage 1–3 endpoints, grouped by agent.
-- `Instabix.postman_environment.json` — variables (`baseUrl`, `apiKey`, ids, `niche`).
+- `Vistabix.postman_collection.json` — all 13 Stage 1–3 endpoints, grouped by agent.
+- `Vistabix.postman_environment.json` — variables (`baseUrl`, `apiKey`, ids, `niche`).
 
 ## Use
 
 1. Start the backend: `cd backend && .venv/Scripts/python.exe -m uvicorn app.main:app --port 8000`.
-2. Import both JSON files into Postman and select the **InstaBix Local** environment.
+2. Import both JSON files into Postman and select the **VistaBix Local** environment.
 3. Run requests in order: health → scout/search → creators approve → outreach send → products generate → products approve → whop publish → whop products → revenue/settings.
 
 `apiKey` is empty by default. When the backend's `API_KEY` is configured, set the environment variable to the same server-side value; `X-API-Key` is sent on every `/api` request. `GET /health` needs no key.

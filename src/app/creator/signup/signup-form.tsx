@@ -65,7 +65,7 @@ export function CreatorSignupForm() {
           <label className="flex items-start gap-2.5 text-[12px] leading-5 text-muted">
             <input type="checkbox" name="consent" className="mt-0.5 size-4 shrink-0 rounded border-line bg-bg accent-lime" />
             <span>
-              I consent to InstaBix reviewing my public Instagram profile and contacting me about a partnership.
+              I consent to VistaBix reviewing my public Instagram profile and contacting me about a partnership.
               {state.fieldErrors?.consent ? (
                 <span className="mt-1 block text-danger">{state.fieldErrors.consent}</span>
               ) : null}

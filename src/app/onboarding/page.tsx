@@ -89,7 +89,7 @@ export default async function OnboardingPage() {
         <div className="flex items-center justify-between">
           <Link href="/" className="inline-flex items-center gap-2.5">
             <Mark className="size-8" />
-            <span className="font-display text-[16px] font-semibold tracking-[-0.03em] text-fg">InstaBix</span>
+            <span className="font-display text-[16px] font-semibold tracking-[-0.03em] text-fg">VistaBix</span>
           </Link>
           <Badge tone="outline">{completed} of 3 complete</Badge>
         </div>

@@ -1,7 +1,7 @@
-# InstaBix frontend starter
+# VistaBix frontend starter
 
 A small, standalone Next.js App Router dashboard that reads from the existing
-InstaBix FastAPI backend. It is additive: it does not import from or modify the
+VistaBix FastAPI backend. It is additive: it does not import from or modify the
 root application, and it runs on port **3100** so the root app can stay on 3000.
 
 ## What it shows

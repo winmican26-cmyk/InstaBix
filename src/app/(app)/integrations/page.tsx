@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { ActionButton } from "@/components/app/action-button";
 import { KillSwitch } from "@/app/(app)/outreach/kill-switch";
 import { timeAgo, formatDateTime } from "@/lib/utils";
+import { FileText, ShieldCheck } from "lucide-react";
 
 export const metadata: Metadata = { title: "Integrations" };
 export const dynamic = "force-dynamic";
@@ -46,6 +47,38 @@ export default async function IntegrationsPage() {
         description="A key being present is not a working connection. Each provider shows the truth of its last call."
         actions={<KillSwitch paused={paused} />}
       />
+
+      {/* Real-time Integration Health Diagnostics Banner */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-lg border border-line bg-surface p-3.5 flex items-center justify-between">
+          <div className="space-y-0.5">
+            <p className="text-[11px] font-mono uppercase tracking-[0.1em] text-faint">Instagram API</p>
+            <p className="text-[12.5px] font-medium text-fg">{connected ? "Token Active" : metaConfigured ? "App Configured" : "Unconfigured"}</p>
+          </div>
+          <Badge tone={connected ? "lime" : metaConfigured ? "info" : "amber"}>{connected ? "live" : metaConfigured ? "ready" : "offline"}</Badge>
+        </div>
+        <div className="rounded-lg border border-line bg-surface p-3.5 flex items-center justify-between">
+          <div className="space-y-0.5">
+            <p className="text-[11px] font-mono uppercase tracking-[0.1em] text-faint">Resend Outreach</p>
+            <p className="text-[12.5px] font-medium text-fg">{resendConfigured ? env.EMAIL_FROM_DOMAIN ?? "Active" : "Domain Missing"}</p>
+          </div>
+          <Badge tone={resendConfigured ? "lime" : "amber"}>{resendConfigured ? "aligned" : "blocked"}</Badge>
+        </div>
+        <div className="rounded-lg border border-line bg-surface p-3.5 flex items-center justify-between">
+          <div className="space-y-0.5">
+            <p className="text-[11px] font-mono uppercase tracking-[0.1em] text-faint">Stripe Webhooks</p>
+            <p className="text-[12.5px] font-medium text-fg">{env.STRIPE_WEBHOOK_SECRET ? "Listener Active" : "Secret Missing"}</p>
+          </div>
+          <Badge tone={env.STRIPE_WEBHOOK_SECRET ? "lime" : "amber"}>{env.STRIPE_WEBHOOK_SECRET ? "healthy" : "action required"}</Badge>
+        </div>
+        <div className="rounded-lg border border-line bg-surface p-3.5 flex items-center justify-between">
+          <div className="space-y-0.5">
+            <p className="text-[11px] font-mono uppercase tracking-[0.1em] text-faint">Google Docs Sync</p>
+            <p className="text-[12.5px] font-medium text-fg">{env.GOOGLE_DOCS_REFRESH_TOKEN ? "Drive Connected" : "Not Linked"}</p>
+          </div>
+          <Badge tone={env.GOOGLE_DOCS_REFRESH_TOKEN ? "lime" : "neutral"}>{env.GOOGLE_DOCS_REFRESH_TOKEN ? "ready" : "idle"}</Badge>
+        </div>
+      </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
@@ -102,7 +135,7 @@ export default async function IntegrationsPage() {
             ) : (
               <>
                 <p className="text-[12.5px] leading-6 text-muted">
-                  Authorise a professional account you control. InstaBix reads your own profile and media, and uses Business
+                  Authorise a professional account you control. VistaBix reads your own profile and media, and uses Business
                   Discovery only for public metrics of public professional accounts.
                 </p>
                 <Button asChild size="sm">

@@ -1,11 +1,11 @@
-# InstaBix — Delivery Plan and Milestone Status
+# VistaBix — Delivery Plan and Milestone Status
 
 **Date:** 2026-11-18  
 **Policy:** a milestone is not marked Done without session evidence. No milestone below is marked Done.
 
 ## Goal
 
-Operate InstaBix as a real-data creator partnership platform: consent-first discovery, human-approved outreach, server-built products, honest commerce reporting, and auditable splits. The shipped UI must never invent a name, metric, email, thread, or status.
+Operate VistaBix as a real-data creator partnership platform: consent-first discovery, human-approved outreach, server-built products, honest commerce reporting, and auditable splits. The shipped UI must never invent a name, metric, email, thread, or status.
 
 ## Architecture baseline
 
@@ -56,7 +56,7 @@ Stage 1 combined gates on 2026-11-19: root `npm run verify` passed (52 Vitest te
 
 ## Stage 2 database schema acceptance (2026-11-19)
 
-The pasted six-table schema was implemented in the FastAPI backend with independent producer/judge atoms. D16 in `DECISIONS.md` records the interpretation rulings (campaign UNIQUE, `instabix_only`, basis points / integer cents authoritative, root schema unchanged).
+The pasted six-table schema was implemented in the FastAPI backend with independent producer/judge atoms. D16 in `DECISIONS.md` records the interpretation rulings (campaign UNIQUE, `vistabix_only`, basis points / integer cents authoritative, root schema unchanged).
 
 | Atom | Final verdict | Core evidence |
 | --- | --- | --- |

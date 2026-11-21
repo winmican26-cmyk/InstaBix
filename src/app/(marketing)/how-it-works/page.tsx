@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
   title: "How it works",
-  description: "The six-stage InstaBix loop, and the platform limits it is designed around.",
+  description: "The six-stage VistaBix loop, and the platform limits it is designed around.",
 };
 
 const stages = [
@@ -50,7 +50,7 @@ const stages = [
     n: "06",
     title: "Money moves through one ledger",
     icon: Split,
-    body: "Stripe Connect handles checkout, KYC and payouts. InstaBix writes sale and refund entries that mirror each other, so the creator statement reconciles to the cent.",
+    body: "Stripe Connect handles checkout, KYC and payouts. VistaBix writes sale and refund entries that mirror each other, so the creator statement reconciles to the cent.",
     gate: "Gate: refunds reverse exactly, never approximately.",
   },
 ];
@@ -117,7 +117,7 @@ export default function HowItWorksPage() {
           You cannot cold-email a creator you have not found lawfully.
         </h2>
         <p className="mt-3 max-w-3xl text-[13px] leading-6 text-muted">
-          So InstaBix is inbound-first: the application page, the invite link and the creator portal are not add-ons, they
+          So VistaBix is inbound-first: the application page, the invite link and the creator portal are not add-ons, they
           are the top of the funnel. If you already know a creator, you can add them manually — with the source recorded and
           the same consent gate before any message.
         </p>

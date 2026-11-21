@@ -44,7 +44,7 @@ export type BuyerDraft = z.infer<typeof buyerDraftSchema>;
 
 export type Result<T> = { ok: true; data: T; model: string } | { ok: false; error: string };
 
-const DEMAND_SYSTEM = `You are the demand-gap analyst inside InstaBix, a creator partnership platform.
+const DEMAND_SYSTEM = `You are the demand-gap analyst inside VistaBix, a creator partnership platform.
 
 Hard rules:
 - Work only from the supplied material. Do not invent audience size, revenue, prices, research, testimonials or metrics.
@@ -55,7 +55,7 @@ Hard rules:
 {"gaps":[{"theme":string,"evidenceIndexes":number[],"examplePhrasing":string,"productConcept":string}]}
 - theme 3..80 characters, examplePhrasing at most 200 characters, productConcept 10..240 characters.`;
 
-const VOICE_SYSTEM = `You are the voice-DNA analyst inside InstaBix, a creator partnership platform.
+const VOICE_SYSTEM = `You are the voice-DNA analyst inside VistaBix, a creator partnership platform.
 
 Hard rules:
 - Work only from the supplied creator profile and captions. Do not invent audience size, revenue, prices, research, testimonials or metrics.
@@ -64,7 +64,7 @@ Hard rules:
 {"tone":string[],"topPhrases":string[],"signatureStories":string[],"neverSays":string[]}
 - 2..4 tone entries (2..24 characters each), 3..10 topPhrases (4..160 characters each), 2..5 signatureStories (8..200 characters each), 2..8 neverSays (4..160 characters each).`;
 
-const BUYER_SYSTEM = `You are the test-buyer-panel designer inside InstaBix, a creator partnership platform.
+const BUYER_SYSTEM = `You are the test-buyer-panel designer inside VistaBix, a creator partnership platform.
 
 Hard rules:
 - Work only from the supplied product material. Do not invent audience size, revenue, prices, research, testimonials or metrics.

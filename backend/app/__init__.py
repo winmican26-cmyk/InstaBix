@@ -1,3 +1,3 @@
-"""InstaBix API package."""
+"""VistaBix API package."""
 
 __version__ = "0.1.0"

@@ -37,7 +37,7 @@ from app.errors import WhopAPIError, WhopNotConfigured
 
 logger = logging.getLogger(__name__)
 
-# Locked business rules. Tuple order is (creator, InstaBix).
+# Locked business rules. Tuple order is (creator, VistaBix).
 FIRST_PRODUCT_SPLIT = (0.60, 0.40)
 SUBSEQUENT_PRODUCT_SPLIT = (0.50, 0.50)
 
@@ -64,10 +64,10 @@ _COMMUNITY_ALLOWED_KEYS = ("platform", "server_id", "invite_code", "name", "chan
 
 
 def split_for(is_first_product: bool) -> tuple[float, float]:
-    """Return (creator_share, instabix_share).
+    """Return (creator_share, vistabix_share).
 
-    Product 1 built with a creator: 60% creator / 40% InstaBix.
-    Product 2 onward: 50% creator / 50% InstaBix.
+    Product 1 built with a creator: 60% creator / 40% VistaBix.
+    Product 2 onward: 50% creator / 50% VistaBix.
     """
     return FIRST_PRODUCT_SPLIT if is_first_product else SUBSEQUENT_PRODUCT_SPLIT
 
@@ -84,7 +84,7 @@ def calc_payouts(
 ) -> dict[str, Any]:
     """Split money in integer cents with half-up rounding on the creator side.
 
-    The remainder always goes to InstaBix, so creator + platform == net exactly.
+    The remainder always goes to VistaBix, so creator + platform == net exactly.
     """
     if not isinstance(gross_cents, int) or isinstance(gross_cents, bool):
         raise TypeError("gross_cents must be an integer number of cents")
@@ -315,7 +315,7 @@ class WhopClient:
         base = "".join(ch.lower() if ch.isalnum() else "-" for ch in value).strip("-")
         while "--" in base:
             base = base.replace("--", "-")
-        return (base or "instabix-product")[:80]
+        return (base or "vistabix-product")[:80]
 
     def _headers(self, idempotency_key: str) -> dict[str, str]:
         return {
@@ -323,7 +323,7 @@ class WhopClient:
             "Api-Version-Date": self.settings.whop_api_version_date,
             "Content-Type": "application/json",
             "Idempotency-Key": idempotency_key[:255],
-            "User-Agent": "InstaBix/0.1 (+https://instabix.com)",
+            "User-Agent": "VistaBix/0.1 (+https://vistabix.com)",
         }
 
     def _record_call(
@@ -557,7 +557,7 @@ class WhopClient:
             "GET",
             f"/products/{quote(product_id, safe='')}",
             payload={},
-            idempotency_key=f"instabix-product-read-{product_id}",
+            idempotency_key=f"vistabix-product-read-{product_id}",
             product_id=product_id,
             reference_id=product_id,
         )
@@ -675,7 +675,7 @@ class WhopClient:
         if not title.strip():
             raise ValueError("A product title is required.")
 
-        stable_key = f"instabix-product-{slug}"
+        stable_key = f"vistabix-product-{slug}"
         safe_metadata = {str(key): str(value) for key, value in (metadata or {}).items()}
         asset_mapping, blocked = self._map_assets(
             cover=cover, pdf=pdf, community=community, safe_metadata=safe_metadata
@@ -736,7 +736,7 @@ class WhopClient:
             "release_method": "buy_now",
             "visibility": "visible",
             "unlimited_stock": True,
-            "metadata": {**safe_metadata, "instabix_product_id": stable_key},
+            "metadata": {**safe_metadata, "vistabix_product_id": stable_key},
         }
         if account_id:
             variant_payload["account_id"] = account_id

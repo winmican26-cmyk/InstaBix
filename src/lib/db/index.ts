@@ -9,8 +9,8 @@ type Db = NodePgDatabase<typeof schema>;
 export type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
 const globalForDb = globalThis as unknown as {
-  __instabixPool?: Pool;
-  __instabixDb?: Db;
+  __vistabixPool?: Pool;
+  __vistabixDb?: Db;
 };
 
 function createPool(): Pool {
@@ -19,7 +19,7 @@ function createPool(): Pool {
     max: 12,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 10_000,
-    application_name: "instabix",
+    application_name: "vistabix",
   });
   pool.on("error", (error) => {
     console.error(JSON.stringify({ level: "error", event: "pg.pool_error", message: error.message }));
@@ -27,12 +27,12 @@ function createPool(): Pool {
   return pool;
 }
 
-export const pool: Pool = globalForDb.__instabixPool ?? createPool();
-export const db: Db = globalForDb.__instabixDb ?? drizzle(pool, { schema });
+export const pool: Pool = globalForDb.__vistabixPool ?? createPool();
+export const db: Db = globalForDb.__vistabixDb ?? drizzle(pool, { schema });
 
 if (process.env.NODE_ENV !== "production") {
-  globalForDb.__instabixPool = pool;
-  globalForDb.__instabixDb = db;
+  globalForDb.__vistabixPool = pool;
+  globalForDb.__vistabixDb = db;
 }
 
 /**

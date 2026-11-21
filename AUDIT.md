@@ -1,8 +1,8 @@
-# InstaBix — Mock Artifact Audit
+# VistaBix — Mock Artifact Audit
 
 **Date:** 2026-11-18  
 **Scope:** shipped root Next.js app, `backend/`, `frontend/`, and the read-only design reference at `reference/kit/`.  
-**Brand rule:** the product is InstaBix everywhere. The source design kit is referred to only as “the legacy kit” or `reference/kit/`.
+**Brand rule:** the product is VistaBix everywhere. The source design kit is referred to only as “the legacy kit” or `reference/kit/`.
 
 ## 1. Reference-kit handling
 
@@ -43,7 +43,7 @@ The forbidden legacy brand pattern is deliberately not written in this document.
 | Runtime honesty smoke | Frontend started against an unused port | `UNREACHABLE_STATE_PRESENT` and `NUMERIC_TEXT_ABSENT` |
 | Client secret leakage | Independent-judge scan of nine client JS chunks | `API_KEY` absent from all client chunks; present only in server SSR chunks |
 | Rendered number provenance | Independent-judge review of `frontend/app/page.tsx` | All rendered numbers derive from response fields; failed cards are structurally isolated |
-| Git/ignore hygiene | `git check-ignore -v backend/.venv backend/instabix.db backend/__pycache__ reference/kit/App.tsx` | All four paths confirmed ignored |
+| Git/ignore hygiene | `git check-ignore -v backend/.venv backend/vistabix.db backend/__pycache__ reference/kit/App.tsx` | All four paths confirmed ignored |
 
 ## 4. Audit outcome
 

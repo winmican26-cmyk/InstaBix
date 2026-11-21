@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { IBM_Plex_Mono, Inter, Space_Grotesk } from "next/font/google";
 import { Toaster } from "sonner";
+import { CookieBanner } from "@/components/brand/cookie-banner";
 import "./globals.css";
 
 const sans = Inter({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
@@ -11,19 +12,19 @@ const baseUrl = process.env.APP_URL ?? "http://localhost:3000";
 
 export const metadata: Metadata = {
   metadataBase: new URL(baseUrl),
-  title: { default: "InstaBix — the creator partnership engine", template: "%s · InstaBix" },
+  title: { default: "VistaBix — the creator partnership engine", template: "%s · VistaBix" },
   description:
-    "InstaBix turns real creator demand into finished products and auditable revenue splits. Consent-first discovery, human-approved outreach, transparent scoring.",
-  applicationName: "InstaBix",
+    "VistaBix turns real creator demand into finished products and auditable revenue splits. Consent-first discovery, human-approved outreach, transparent scoring.",
+  applicationName: "VistaBix",
   icons: { icon: "/icon.svg", apple: "/icon.svg" },
   openGraph: {
-    title: "InstaBix — the creator partnership engine",
+    title: "VistaBix — the creator partnership engine",
     description: "Consent-first creator partnerships, built on real data and auditable splits.",
     url: baseUrl,
-    siteName: "InstaBix",
+    siteName: "VistaBix",
     type: "website",
   },
-  twitter: { card: "summary_large_image", title: "InstaBix", description: "The creator partnership engine." },
+  twitter: { card: "summary_large_image", title: "VistaBix", description: "The creator partnership engine." },
   robots: { index: true, follow: true },
 };
 
@@ -49,6 +50,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           Skip to content
         </a>
         {children}
+        <CookieBanner />
         <Toaster
           theme="system"
           position="bottom-right"

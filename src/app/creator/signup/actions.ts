@@ -68,7 +68,7 @@ export async function creatorSignupAction(
   }
   if (!limit.ok) return { error: "Too many accounts created from this network. Try again later." };
 
-  const slug = process.env.PUBLIC_ORG_SLUG ?? "instabix-hq";
+  const slug = process.env.PUBLIC_ORG_SLUG ?? "vistabix-hq";
   let orgRows: { id: string }[];
   try {
     orgRows = await db.select({ id: orgs.id }).from(orgs).where(eq(orgs.slug, slug)).limit(1);

@@ -73,8 +73,8 @@ def render_outreach(
     creator: Any,
     template_key: str = "initial",
     *,
-    sender_name: str = "The InstaBix team",
-    unsubscribe_url: str = "https://instabix.com/unsubscribe",
+    sender_name: str = "The VistaBix team",
+    unsubscribe_url: str = "https://vistabix.com/unsubscribe",
     reel_title: str | None = None,
     audience_insight: str | None = None,
 ) -> dict[str, str]:

@@ -6,4 +6,4 @@
  */
 process.env.APP_URL ??= "http://localhost:3000";
 process.env.AUTH_SECRET ??= "test-only-secret-value-that-is-long-enough";
-process.env.DATABASE_URL ??= "postgres://instabix_app:test@localhost:55432/instabix";
+process.env.DATABASE_URL ??= "postgres://vistabix_app:test@localhost:55432/vistabix";

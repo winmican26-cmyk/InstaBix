@@ -1,4 +1,4 @@
--- InstaBix Stage 2 target schema (Postgres).
+-- VistaBix Stage 2 target schema (Postgres).
 --
 -- Documentation DDL only: the backend applies additive changes at runtime via
 -- app/migrate.py, and tests use SQLite. This file records the intended end
@@ -105,7 +105,7 @@ CREATE TABLE IF NOT EXISTS products (
     CONSTRAINT ck_products_word_count CHECK (word_count >= 0),
     CONSTRAINT ck_products_split_bps_sum CHECK (split_creator_bps + split_platform_bps = 10000),
     CONSTRAINT ck_products_split_mirror_sum CHECK (split_creator + split_operator = 1.00),
-    CONSTRAINT ck_products_branding CHECK (branding IN ('hybrid', 'creator_only', 'instabix_only')),
+    CONSTRAINT ck_products_branding CHECK (branding IN ('hybrid', 'creator_only', 'vistabix_only')),
     CONSTRAINT ck_products_status CHECK (status IN (
         'idea', 'toc_approved', 'draft', 'creator_approved', 'live', 'rejected'
     ))

@@ -22,7 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
-  title: "InstaBix — the creator partnership engine",
+  title: "VistaBix — the creator partnership engine",
   description:
     "Turn real creator demand into finished products and auditable revenue splits. Consent-first discovery, official APIs, human-approved outreach.",
 };
@@ -57,7 +57,7 @@ export default function HomePage() {
               <span className="text-lime">Real splits.</span>
             </h1>
             <p className="mt-6 max-w-lg text-[15px] leading-7 text-muted">
-              InstaBix is the operating system for creator partnerships: find people whose audience is already asking,
+              VistaBix is the operating system for creator partnerships: find people whose audience is already asking,
               build the product they should have made, and pay them through a ledger that cannot fudge a cent.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -146,12 +146,12 @@ export default function HomePage() {
               {
                 bad: "Scraped ‘leads’",
                 good: "Consent and public APIs",
-                body: "Meta does not expose creator emails, comments or demographics. Scraping gets the app banned and the list worthless. InstaBix inverts the funnel: creators opt in.",
+                body: "Meta does not expose creator emails, comments or demographics. Scraping gets the app banned and the list worthless. VistaBix inverts the funnel: creators opt in.",
               },
               {
                 bad: "Decorative dashboards",
                 good: "Traceable rows",
-                body: "A number with no source is a liability. Every figure in InstaBix comes from a row or a live API response, with freshness and sample size attached.",
+                body: "A number with no source is a liability. Every figure in VistaBix comes from a row or a live API response, with freshness and sample size attached.",
               },
               {
                 bad: "Handshake splits",

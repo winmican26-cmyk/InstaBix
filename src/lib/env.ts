@@ -39,6 +39,14 @@ const schema = z.object({
   ANTHROPIC_API_KEY: optionalString,
   AI_MODEL: z.string().default("claude-sonnet-4-5"),
 
+  GOOGLE_DOCS_CLIENT_ID: optionalString,
+  GOOGLE_DOCS_CLIENT_SECRET: optionalString,
+  GOOGLE_DOCS_REFRESH_TOKEN: optionalString,
+  GOOGLE_DOCS_EXPORT_USER_EMAIL: optionalString,
+
+  PLAGIARISM_API_KEY: optionalString,
+  AI_DETECTION_API_KEY: optionalString,
+
   SENTRY_DSN: optionalString,
   POSTHOG_KEY: optionalString,
 

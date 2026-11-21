@@ -86,7 +86,7 @@ describe("dailyCapCondition", () => {
 describe("domainFromEmail", () => {
   it("lowercases the domain of a recipient or sender address", () => {
     expect(domainFromEmail("Creator@Example.COM")).toBe("example.com");
-    expect(domainFromEmail("mail@sub.instabix.co.uk")).toBe("sub.instabix.co.uk");
+    expect(domainFromEmail("mail@sub.vistabix.co.uk")).toBe("sub.vistabix.co.uk");
   });
 
   it("returns null for malformed addresses", () => {

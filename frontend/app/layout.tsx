@@ -4,8 +4,8 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "InstaBix · Operator Dashboard",
-  description: "InstaBix operator dashboard, read live from the InstaBix API.",
+  title: "VistaBix · Operator Dashboard",
+  description: "VistaBix operator dashboard, read live from the VistaBix API.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

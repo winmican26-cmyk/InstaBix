@@ -58,7 +58,7 @@ export async function applyAction(_prev: ApplyState, formData: FormData): Promis
   const limit = await checkRateLimit(`apply:${ip}`, 5, 60 * 60);
   if (!limit.ok) return { error: "Too many applications from this network. Try again later." };
 
-  const slug = process.env.PUBLIC_ORG_SLUG ?? "instabix-hq";
+  const slug = process.env.PUBLIC_ORG_SLUG ?? "vistabix-hq";
   const [org] = await db.select({ id: orgs.id }).from(orgs).where(eq(orgs.slug, slug)).limit(1);
   if (!org) {
     return { error: "Applications are not open yet. The workspace operator still needs to finish setup." };
