@@ -1,6 +1,20 @@
 -- Tenant isolation, enforced by Postgres rather than by application discipline.
 -- The runtime role is deliberately NOT the table owner and NOT a superuser.
 
+-- Verify the pre-provisioned role without requiring a database superuser.
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_catalog.pg_roles
+    where rolname = 'vistabix_app'
+      and not rolsuper
+      and not rolbypassrls
+  ) then
+    raise exception 'vistabix_app must exist with NOSUPERUSER and NOBYPASSRLS.';
+  end if;
+end $$;
+
 create extension if not exists pg_trgm;
 
 do $$
@@ -35,6 +49,3 @@ grant select, insert, update, delete on all tables in schema public to vistabix_
 grant usage, select on all sequences in schema public to vistabix_app;
 alter default privileges in schema public grant select, insert, update, delete on tables to vistabix_app;
 alter default privileges in schema public grant usage, select on sequences to vistabix_app;
-
--- Nothing in the runtime role should be able to bypass policy.
-alter role vistabix_app nosuperuser;
