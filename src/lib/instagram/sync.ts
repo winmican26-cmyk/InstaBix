@@ -115,6 +115,7 @@ export type EnrichResult = {
   error?: string;
   message?: string;
   retryAfterSeconds?: number;
+  status?: "not_found" | "not_eligible" | "rate_limited";
 };
 
 /**
@@ -126,7 +127,7 @@ export async function enrichCreator(orgId: string, creatorId: string): Promise<E
     tx.select().from(creatorAccounts).where(eq(creatorAccounts.id, creatorId)).limit(1),
   );
   if (!creator) return { ok: false, error: "Creator not found." };
-  if (creator.consentStatus === "revoked") return { ok: false, error: "Consent has been revoked. Enrichment is disabled." };
+  if (creator.consentStatus !== "granted") return { ok: false, error: "Consent is not granted. Enrichment is disabled." };
 
   let limits: Awaited<ReturnType<typeof checkRateLimit>>[];
   try {
@@ -136,12 +137,22 @@ export async function enrichCreator(orgId: string, creatorId: string): Promise<E
     ]);
   } catch {
     // Fail closed: without the shared budget check, no Graph request may go out.
-    return { ok: false, error: "Rate limit check unavailable. Try again shortly.", retryAfterSeconds: 60 };
+    return {
+      ok: false,
+      error: "Rate limit check unavailable. Try again shortly.",
+      retryAfterSeconds: 60,
+      status: "rate_limited",
+    };
   }
   const [orgLimit, globalLimit] = limits;
   if (!orgLimit || !globalLimit || !orgLimit.ok || !globalLimit.ok) {
     const retryAfterSeconds = Math.max(orgLimit?.retryAfterSeconds ?? 60, globalLimit?.retryAfterSeconds ?? 60);
-    return { ok: false, error: "Discovery is rate limited. Try again shortly.", retryAfterSeconds };
+    return {
+      ok: false,
+      error: "Discovery is rate limited. Try again shortly.",
+      retryAfterSeconds,
+      status: "rate_limited",
+    };
   }
 
   let discovery;
@@ -150,7 +161,28 @@ export async function enrichCreator(orgId: string, creatorId: string): Promise<E
   } catch (error) {
     const message = errorMessage(error);
     logger.warn("instagram.enrich_failed", { orgId, creatorId, message });
-    return { ok: false, error: message };
+    let status: EnrichResult["status"];
+    let retryAfterSeconds: number | undefined;
+    if (error instanceof InstagramError) {
+      if (error.status === 404 || /not found|no profile/i.test(message)) {
+        status = "not_found";
+      } else if (
+        error.status === 400 ||
+        error.status === 403 ||
+        /not eligible|not a business|professional account|permission|not authorized/i.test(message)
+      ) {
+        status = "not_eligible";
+      } else if (error.status === 429) {
+        status = "rate_limited";
+        retryAfterSeconds = 60;
+      }
+    }
+    return {
+      ok: false,
+      error: message,
+      ...(status ? { status } : {}),
+      ...(retryAfterSeconds ? { retryAfterSeconds } : {}),
+    };
   }
 
   const followers = discovery.profile.followers_count ?? 0;

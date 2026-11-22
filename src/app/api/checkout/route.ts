@@ -37,7 +37,7 @@ export async function POST(request: Request) {
     tx
       .select({ username: creatorAccounts.username, displayName: creatorAccounts.displayName })
       .from(creatorAccounts)
-      .where(eq(creatorAccounts.id, product.creatorId))
+      .where(and(eq(creatorAccounts.id, product.creatorId), eq(creatorAccounts.consentStatus, "granted")))
       .limit(1),
   );
 

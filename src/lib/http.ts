@@ -33,8 +33,19 @@ export function clientIp(request: Request): string | null {
   return clientIpFromHeaders(request.headers);
 }
 
-export function rateLimitResponse(retryAfterSeconds: number, message = "Too many requests.") {
-  return Response.json({ error: message }, {
+export function rateLimitResponse(
+  retryAfterSeconds: number,
+  message = "Too many requests.",
+  extra?: Record<string, unknown>,
+) {
+  const body: Record<string, unknown> = { error: message };
+  if (extra) {
+    for (const [key, value] of Object.entries(extra)) {
+      // The error message always comes from this function, never from a caller.
+      if (key !== "error") body[key] = value;
+    }
+  }
+  return Response.json(body, {
     status: 429,
     headers: { "Retry-After": String(Math.max(1, Math.ceil(retryAfterSeconds))) },
   });

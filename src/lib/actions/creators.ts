@@ -110,6 +110,7 @@ export async function enrichCreatorAction(creatorId: string): Promise<CreatorAct
     tx.select().from(creatorAccounts).where(eq(creatorAccounts.id, creatorId)).limit(1),
   );
   if (!creator) return { error: "Creator not found in this workspace." };
+  if (creator.consentStatus !== "granted") return { error: "Consent has not been granted. Record consent before enrichment." };
 
   const result = await enrichCreator(org.id, creatorId);
 
