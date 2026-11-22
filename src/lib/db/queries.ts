@@ -54,7 +54,8 @@ export async function getDashboard(orgId: string) {
         live: sql<number>`count(*) filter (where status = 'published')::int`,
         inReview: sql<number>`count(*) filter (where status in ('review','outline_pending'))::int`,
       })
-      .from(products);
+      .from(products)
+      .where(eq(products.orgId, orgId));
 
     const [ledgerStats] = await tx
       .select({
