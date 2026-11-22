@@ -1,6 +1,7 @@
 import "server-only";
 import { and, asc, desc, eq, getTableColumns, ilike, inArray, or, sql } from "drizzle-orm";
 import { withOrg } from "@/lib/db";
+import { clampCreatorPage, CREATOR_PAGE_SIZE, CREATOR_SORT_KEYS, type CreatorSortKey } from "@/lib/creators/list-params";
 import {
   agreements,
   auditEvents,
@@ -97,7 +98,16 @@ export async function getDashboard(orgId: string) {
   });
 }
 
-export type CreatorFilters = { q?: string; status?: string; source?: string };
+export type CreatorFilters = {
+  q?: string;
+  status?: string;
+  source?: string;
+  sort?: CreatorSortKey;
+  dir?: "asc" | "desc";
+  page?: number;
+  minFollowers?: number;
+  maxFollowers?: number;
+};
 
 export async function listCreators(orgId: string, filters: CreatorFilters = {}) {
   return withOrg(orgId, async (tx) => {
@@ -109,33 +119,96 @@ export async function listCreators(orgId: string, filters: CreatorFilters = {}) 
     if (filters.status) conditions.push(eq(creatorAccounts.status, filters.status as typeof creatorAccounts.status.enumValues[number]));
     if (filters.source) conditions.push(eq(creatorAccounts.source, filters.source as typeof creatorAccounts.source.enumValues[number]));
 
-    const rows = await tx
+    // Drizzle drops table qualification for column refs in select fields, which
+    // would make `s.creator_id = "id"` correlate to the snapshot's own id. Use
+    // one explicit, static reference so projection, filters and ordering all
+    // read the same latest snapshot/score for this creator.
+    const creatorIdRef = sql.raw(`"creator_accounts"."id"`);
+    const latestFollowers = sql<number | null>`(select followers from creator_snapshots s where s.creator_id = ${creatorIdRef} order by s.captured_at desc limit 1)`;
+    const lastEnrichedAt = sql<Date | null>`(select captured_at from creator_snapshots s where s.creator_id = ${creatorIdRef} order by s.captured_at desc limit 1)`;
+    const latestScoreTotal = sql<string | null>`(select total from scores sc where sc.creator_id = ${creatorIdRef} order by sc.computed_at desc limit 1)`;
+
+    if (filters.minFollowers !== undefined) conditions.push(sql`${latestFollowers} >= ${filters.minFollowers}`);
+    if (filters.maxFollowers !== undefined) conditions.push(sql`${latestFollowers} <= ${filters.maxFollowers}`);
+
+    const sort = filters.sort && (CREATOR_SORT_KEYS as readonly string[]).includes(filters.sort) ? filters.sort : "created";
+    const dir = filters.dir === "asc" ? "asc" : "desc";
+    const primarySort = {
+      created: creatorAccounts.createdAt,
+      username: creatorAccounts.username,
+      followers: latestFollowers,
+      score: latestScoreTotal,
+      enriched: lastEnrichedAt,
+    }[sort];
+    const orderBy = [
+      dir === "asc" ? asc(primarySort) : desc(primarySort),
+      asc(creatorAccounts.id), // stable tiebreaker; id is never a primary sort key here
+    ];
+    const page = clampCreatorPage(filters.page);
+
+    const rowsQuery = tx
       .select({
         ...getTableColumns(creatorAccounts),
-        followers: sql<number | null>`(select followers from creator_snapshots s where s.creator_id = ${creatorAccounts.id} order by s.captured_at desc limit 1)`,
-        lastEnrichedAt: sql<Date | null>`(select captured_at from creator_snapshots s where s.creator_id = ${creatorAccounts.id} order by s.captured_at desc limit 1)`,
+        followers: latestFollowers,
+        lastEnrichedAt,
       })
       .from(creatorAccounts)
       .where(and(...conditions))
-      .orderBy(desc(creatorAccounts.createdAt))
-      .limit(100);
+      .orderBy(...orderBy)
+      .limit(CREATOR_PAGE_SIZE)
+      .offset((page - 1) * CREATOR_PAGE_SIZE);
+    const [countRow, rows] = await Promise.all([
+      tx.select({ count: sql<number>`count(*)::int` }).from(creatorAccounts).where(and(...conditions)),
+      rowsQuery,
+    ]);
 
-    if (rows.length === 0) return [];
-    const scoreRows = await tx
-      .select({ creatorId: scores.creatorId, total: scores.total, sampleSize: scores.sampleSize, computedAt: scores.computedAt })
-      .from(scores)
-      .where(
-        inArray(
-          scores.creatorId,
-          rows.map((r) => r.id),
-        ),
-      )
-      .orderBy(desc(scores.computedAt));
+    const total = countRow[0]?.count ?? 0;
+    const scoreRows = rows.length
+      ? await tx
+          .select({ creatorId: scores.creatorId, total: scores.total, sampleSize: scores.sampleSize, computedAt: scores.computedAt })
+          .from(scores)
+          .where(
+            inArray(
+              scores.creatorId,
+              rows.map((r) => r.id),
+            ),
+          )
+          .orderBy(desc(scores.computedAt))
+      : [];
 
-    const latest = new Map<string, (typeof scoreRows)[number]>();
-    for (const score of scoreRows) if (!latest.has(score.creatorId)) latest.set(score.creatorId, score);
+    const latestScores = new Map<string, (typeof scoreRows)[number]>();
+    for (const score of scoreRows) if (!latestScores.has(score.creatorId)) latestScores.set(score.creatorId, score);
 
-    return rows.map((row) => ({ ...row, score: latest.get(row.id) ?? null }));
+    type Row = (typeof rows)[number] & { score: (typeof scoreRows)[number] | null };
+    type Result = {
+      rows: Row[];
+      total: number;
+      page: number;
+      pageSize: number;
+      pageCount: number;
+      // Non-enumerable legacy aliases: the vendored insta_repo copy is compiled
+      // by the root tsconfig and still consumes the old array return directly.
+      readonly length: number;
+      map<T>(callback: (row: Row, index: number, array: Row[]) => T, thisArg?: unknown): T[];
+    };
+
+    const result = Object.defineProperties(
+      {
+        rows: rows.map((row) => ({ ...row, score: latestScores.get(row.id) ?? null })),
+        total,
+        page,
+        pageSize: CREATOR_PAGE_SIZE,
+        pageCount: Math.max(1, Math.ceil(total / CREATOR_PAGE_SIZE)),
+      },
+      {
+        length: { get: () => result.rows.length, enumerable: false },
+        map: {
+          value: <T,>(callback: (row: Row, index: number, array: Row[]) => T, thisArg?: unknown) => result.rows.map(callback, thisArg),
+          enumerable: false,
+        },
+      },
+    ) as unknown as Result;
+    return result;
   });
 }
 
