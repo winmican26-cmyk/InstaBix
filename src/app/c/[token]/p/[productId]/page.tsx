@@ -116,7 +116,7 @@ export default async function PortalProductPage({ params }: { params: Promise<{ 
             </div>
             <div className="flex items-center gap-2">
               <Button asChild variant="outline" size="sm">
-                <a href={`/api/products/${product.id}/export/pdf`} target="_blank" rel="noopener noreferrer">
+                <a href={`/c/${token}/p/${product.id}/pdf`} target="_blank" rel="noopener noreferrer">
                   <Download className="mr-1.5 size-3.5" />
                   Download PDF
                 </a>
