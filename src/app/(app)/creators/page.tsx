@@ -58,7 +58,7 @@ export default async function CreatorsPage({
       <PageHeader
         eyebrow="Pipeline"
         title="Creators"
-        description="Every creator has a source, a consent state and a provenance trail. Nothing is imported from a scraped list."
+        description="VistaBix never scrapes Instagram. You supply handles; we enrich them through official Business Discovery."
         actions={
           <>
             <Button asChild variant="secondary" size="sm">
