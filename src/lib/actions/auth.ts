@@ -1,7 +1,7 @@
 "use server";
 
-import { eq, sql } from "drizzle-orm";
 import { headers } from "next/headers";
+import { eq, sql } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db, withOrg } from "@/lib/db";
@@ -11,6 +11,7 @@ import { hashPassword, passwordIssues, verifyPassword } from "@/lib/auth/passwor
 import { checkRateLimit } from "@/lib/rate-limit";
 import { insertAudit } from "@/lib/audit";
 import { logger } from "@/lib/logger";
+import { clientIpFromHeaders } from "@/lib/http";
 import { slugify } from "@/lib/utils";
 
 export type AuthState = { error?: string; fieldErrors?: Record<string, string> };
@@ -36,8 +37,7 @@ export async function loginAction(_prev: AuthState, formData: FormData): Promise
   if (!parsed.success) return { fieldErrors: { email: "Enter a valid email address." } };
   if (!password) return { fieldErrors: { password: "Enter your password." } };
 
-  const h = await headers();
-  const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "local";
+  const ip = clientIpFromHeaders(await headers()) ?? "local";
 
   let limit: Awaited<ReturnType<typeof checkRateLimit>>;
   try {
@@ -129,8 +129,7 @@ export async function signupAction(_prev: AuthState, formData: FormData): Promis
   }
   if (existing.length) return { fieldErrors: { email: "An account already exists for this email." } };
 
-  const h = await headers();
-  const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "local";
+  const ip = clientIpFromHeaders(await headers()) ?? "local";
   let limit: Awaited<ReturnType<typeof checkRateLimit>>;
   try {
     limit = await checkRateLimit(`signup:${ip}`, 5, 60 * 60);

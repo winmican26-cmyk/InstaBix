@@ -9,6 +9,7 @@ import { agreements, consents, creatorAccounts, products } from "@/lib/db/schema
 import { insertAudit } from "@/lib/audit";
 import { sha256 } from "@/lib/crypto";
 import { logger, errorMessage } from "@/lib/logger";
+import { clientIpFromHeaders } from "@/lib/http";
 import { agreementText, loadPortalData, resolvePortalToken } from "@/lib/portal";
 import { checkRateLimit } from "@/lib/rate-limit";
 
@@ -17,7 +18,7 @@ export type PortalState = { error?: string; success?: string; fieldErrors?: Reco
 async function requestContext() {
   const h = await headers();
   return {
-    ip: h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null,
+    ip: clientIpFromHeaders(h) ?? null,
     userAgent: h.get("user-agent")?.slice(0, 400) ?? null,
   };
 }

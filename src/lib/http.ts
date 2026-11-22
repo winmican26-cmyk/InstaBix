@@ -19,10 +19,25 @@ export function assertSameOrigin(request: Request): void {
   }
 }
 
+/**
+ * Structural header type so both Next's ReadonlyHeaders and the Web Headers object
+ * can be passed in. Netlify injects `x-nf-client-connection-ip` at the edge; the
+ * usual forwarding headers are client-controlled and must never be trusted here.
+ */
+export function clientIpFromHeaders(headers: { get(name: string): string | null }): string | null {
+  const ip = headers.get("x-nf-client-connection-ip");
+  return ip?.trim() || null;
+}
+
 export function clientIp(request: Request): string | null {
-  const forwarded = request.headers.get("x-forwarded-for");
-  if (forwarded) return forwarded.split(",")[0]?.trim() ?? null;
-  return request.headers.get("x-real-ip");
+  return clientIpFromHeaders(request.headers);
+}
+
+export function rateLimitResponse(retryAfterSeconds: number, message = "Too many requests.") {
+  return Response.json({ error: message }, {
+    status: 429,
+    headers: { "Retry-After": String(Math.max(1, Math.ceil(retryAfterSeconds))) },
+  });
 }
 
 export function jsonError(message: string, status = 400) {
