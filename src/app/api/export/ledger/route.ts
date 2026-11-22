@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { withOrg } from "@/lib/db";
 import { creatorAccounts, ledgerEntries, orders } from "@/lib/db/schema";
 import { getWorkspace } from "@/lib/auth/session";
@@ -29,7 +29,7 @@ export async function GET(request: Request) {
       })
       .from(ledgerEntries)
       .leftJoin(orders, eq(orders.id, ledgerEntries.orderId))
-      .leftJoin(creatorAccounts, eq(creatorAccounts.id, ledgerEntries.creatorId))
+      .leftJoin(creatorAccounts, and(eq(creatorAccounts.id, ledgerEntries.creatorId), eq(creatorAccounts.orgId, org.id), eq(creatorAccounts.consentStatus, "granted")))
       .orderBy(asc(ledgerEntries.createdAt));
 
     await insertAudit(tx, {

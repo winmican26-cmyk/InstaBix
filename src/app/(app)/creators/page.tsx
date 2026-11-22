@@ -14,6 +14,7 @@ import { Table, TBody, TD, TH, THead, TR, TableShell } from "@/components/ui/tab
 import { Avatar } from "@/components/ui/avatar";
 import { ActionButton } from "@/components/app/action-button";
 import { AddCreatorDialog } from "./add-creator-dialog";
+import { BatchImportDialog } from "./batch-import-dialog";
 import { CREATOR_STATUS_LABEL, SOURCE_LABEL, CONSENT_LABEL } from "@/lib/constants";
 import { formatNumber, timeAgo } from "@/lib/utils";
 
@@ -66,6 +67,7 @@ export default async function CreatorsPage({
                 <Download /> Export CSV
               </Link>
             </Button>
+            <BatchImportDialog />
             <AddCreatorDialog defaultOpen={params.add === "1"} />
           </>
         }

@@ -1,4 +1,4 @@
-import { asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import { withOrg } from "@/lib/db";
 import {
   agreements,
@@ -38,7 +38,7 @@ export async function GET(request: Request) {
         createdAt: creatorAccounts.createdAt,
       })
       .from(creatorAccounts)
-      .where(eq(creatorAccounts.orgId, org.id))
+      .where(and(eq(creatorAccounts.orgId, org.id), eq(creatorAccounts.consentStatus, "granted")))
       .orderBy(asc(creatorAccounts.createdAt));
 
     const productRows = await tx

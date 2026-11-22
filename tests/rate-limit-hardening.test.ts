@@ -70,8 +70,8 @@ beforeAll(async () => {
     ]);
     await admin.query("insert into memberships (org_id, user_id, role) values ($1, $2, 'admin')", [orgId, userId]);
     await admin.query(
-      "insert into creator_accounts (id, org_id, username, source, created_by) values ($1, $2, $3, 'discovery', $4)",
-      [creatorId, orgId, `rate_limit_${suffix}`, userId],
+      "insert into creator_accounts (id, org_id, username, source, created_by, consent_status) values ($1, $2, $3, 'discovery', $4, $5)",
+      [creatorId, orgId, `rate_limit_${suffix}`, userId, "granted"],
     );
     for (const [key, count] of [
       [orgLimitKey, DISCOVERY_PER_ORG_HOURLY_LIMIT + 10],
