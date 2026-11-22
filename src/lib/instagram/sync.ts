@@ -148,6 +148,8 @@ export async function enrichCreator(orgId: string, creatorId: string): Promise<E
           postedAt: item.timestamp ? new Date(item.timestamp) : null,
           likeCount: item.like_count ?? 0,
           commentCount: item.comments_count ?? 0,
+          // Views are omitted for some media types; keep SQL NULL, never zero.
+          viewCount: item.view_count ?? null,
           metricsCapturedAt: new Date(),
         })
         .onConflictDoUpdate({
@@ -155,6 +157,7 @@ export async function enrichCreator(orgId: string, creatorId: string): Promise<E
           set: {
             likeCount: item.like_count ?? 0,
             commentCount: item.comments_count ?? 0,
+            viewCount: item.view_count ?? null,
             caption: item.caption ?? null,
             metricsCapturedAt: new Date(),
           },
@@ -201,6 +204,7 @@ export async function recomputeScore(orgId: string, creatorId: string): Promise<
     media: data.rows.map((m) => ({
       likes: m.likeCount,
       comments: m.commentCount,
+      views: m.viewCount ?? null,
       caption: m.caption,
       postedAt: m.postedAt,
     })),

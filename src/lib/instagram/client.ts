@@ -65,6 +65,8 @@ export type IgMedia = {
   timestamp?: string;
   like_count?: number;
   comments_count?: number;
+  /** Reels views, available only through Business Discovery; absent when not returned. */
+  view_count?: number;
 };
 
 export function authorizeUrl(state: string, scopes = "instagram_business_basic"): string {
@@ -144,7 +146,7 @@ export async function businessDiscovery(username: string): Promise<DiscoveryResu
     throw new InstagramError("Business Discovery is not configured. Add META_DISCOVERY_TOKEN and META_DISCOVERY_IG_USER_ID.", 501);
   }
   const fields = [
-    `business_discovery.username(${username}){followers_count,media_count,media{id,caption,media_type,permalink,thumbnail_url,timestamp,like_count,comments_count}}`,
+    `business_discovery.username(${username}){followers_count,media_count,media{id,caption,media_type,permalink,thumbnail_url,timestamp,like_count,comments_count,view_count}}`,
   ].join(",");
   const url = new URL(`${FB_GRAPH}/${env.META_DISCOVERY_IG_USER_ID}`);
   url.searchParams.set("fields", fields);
