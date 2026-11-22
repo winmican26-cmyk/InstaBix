@@ -1,8 +1,8 @@
 "use server";
 
+import { headers } from "next/headers";
 import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { headers } from "next/headers";
 import { z } from "zod";
 import { withOrg } from "@/lib/db";
 import { creatorAccounts, portalTokens, suppressions } from "@/lib/db/schema";
@@ -13,6 +13,7 @@ import { absoluteUrl, normalizeUsername } from "@/lib/utils";
 import { randomToken, sha256 } from "@/lib/crypto";
 import { env } from "@/lib/env";
 import { logger, errorMessage } from "@/lib/logger";
+import { clientIpFromHeaders } from "@/lib/http";
 
 export type CreatorActionState = { error?: string; success?: string; fieldErrors?: Record<string, string>; portalUrl?: string };
 
@@ -26,8 +27,7 @@ const createSchema = z.object({
 });
 
 async function requestIp() {
-  const h = await headers();
-  return h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+  return clientIpFromHeaders(await headers());
 }
 
 export async function createCreatorAction(_prev: CreatorActionState, formData: FormData): Promise<CreatorActionState> {

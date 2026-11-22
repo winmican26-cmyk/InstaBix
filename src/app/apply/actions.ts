@@ -1,13 +1,14 @@
 "use server";
 
-import { eq } from "drizzle-orm";
 import { headers } from "next/headers";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db, withOrg } from "@/lib/db";
 import { consents, creatorAccounts, orgs } from "@/lib/db/schema";
 import { insertAudit } from "@/lib/audit";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { logger } from "@/lib/logger";
+import { clientIpFromHeaders } from "@/lib/http";
 import { normalizeUsername } from "@/lib/utils";
 
 export type ApplyState = {
@@ -54,7 +55,7 @@ export async function applyAction(_prev: ApplyState, formData: FormData): Promis
   if (!username) return { fieldErrors: { username: "Use a valid Instagram handle (letters, numbers, dots, underscores)." } };
 
   const h = await headers();
-  const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "local";
+  const ip = clientIpFromHeaders(h) ?? "local";
   const limit = await checkRateLimit(`apply:${ip}`, 5, 60 * 60);
   if (!limit.ok) return { error: "Too many applications from this network. Try again later." };
 

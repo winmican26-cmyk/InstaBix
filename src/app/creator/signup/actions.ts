@@ -8,6 +8,7 @@ import { consents, creatorAccounts, memberships, orgs, users } from "@/lib/db/sc
 import { insertAudit } from "@/lib/audit";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { logger } from "@/lib/logger";
+import { clientIpFromHeaders } from "@/lib/http";
 import { createSession } from "@/lib/auth/session";
 import { CREATOR_ROLE } from "@/lib/auth/roles";
 import { hashPassword } from "@/lib/auth/password";
@@ -53,7 +54,7 @@ export async function creatorSignupAction(
   const { value, handle } = validation;
 
   const h = await headers();
-  const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "local";
+  const ip = clientIpFromHeaders(h) ?? "local";
   const userAgent = h.get("user-agent")?.slice(0, 400) ?? null;
 
   let limit: Awaited<ReturnType<typeof checkRateLimit>>;

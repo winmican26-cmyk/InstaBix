@@ -1,7 +1,7 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
 import { headers } from "next/headers";
+import { and, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db, withOrg } from "@/lib/db";
@@ -12,6 +12,7 @@ import { insertAudit } from "@/lib/audit";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { sha256 } from "@/lib/crypto";
 import { logger, errorMessage } from "@/lib/logger";
+import { clientIpFromHeaders } from "@/lib/http";
 import { resolveInvite } from "@/lib/invites";
 
 export type InviteState = { error?: string; success?: string; fieldErrors?: Record<string, string> };
@@ -39,8 +40,7 @@ export async function acceptInviteAction(token: string, _prev: InviteState, form
     return { fieldErrors };
   }
 
-  const h = await headers();
-  const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "local";
+  const ip = clientIpFromHeaders(await headers()) ?? "local";
   const limit = await checkRateLimit(`invite:${ip}:${sha256(token).slice(0, 16)}`, 10, 15 * 60);
   if (!limit.ok) return { error: "Too many attempts. Try again in a few minutes." };
 
