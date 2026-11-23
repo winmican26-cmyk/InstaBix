@@ -1,5 +1,6 @@
 import {
   boolean,
+  date,
   index,
   integer,
   jsonb,
@@ -852,6 +853,40 @@ export const statements = pgTable(
   },
   (t) => [index("statements_creator_idx").on(t.creatorId, t.periodEnd)],
 );
+
+/* ───────────────────────────── billing entitlements ───────────────────────────── */
+
+export const creatorUnlocks = pgTable(
+  "creator_unlocks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    creatorId: uuid("creator_id")
+      .notNull()
+      .references(() => creatorAccounts.id, { onDelete: "cascade" }),
+    unlockedBy: uuid("unlocked_by").references(() => users.id, { onDelete: "set null" }),
+    weekStart: date("week_start").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("creator_unlocks_org_creator_week_idx").on(t.orgId, t.creatorId, t.weekStart),
+    index("creator_unlocks_org_week_idx").on(t.orgId, t.weekStart),
+  ],
+);
+
+export const orgEntitlements = pgTable("org_entitlements", {
+  orgId: uuid("org_id")
+    .primaryKey()
+    .references(() => orgs.id, { onDelete: "cascade" }),
+  plan: text("plan").notNull().default("free"),
+  status: text("status").notNull().default("inactive"),
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
+  currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
 
 export type Org = typeof orgs.$inferSelect;
 export type User = typeof users.$inferSelect;
