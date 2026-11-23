@@ -44,6 +44,12 @@ const schema = z.object({
   GOOGLE_DOCS_REFRESH_TOKEN: optionalString,
   GOOGLE_DOCS_EXPORT_USER_EMAIL: optionalString,
 
+  // Google sign-in is a separate OAuth client. Never reuse the Docs export
+  // credentials; that account is only for the export integration.
+  GOOGLE_CLIENT_ID: optionalString,
+  GOOGLE_CLIENT_SECRET: optionalString,
+  GOOGLE_REDIRECT_URI: optionalString,
+
   PLAGIARISM_API_KEY: optionalString,
   AI_DETECTION_API_KEY: optionalString,
 
@@ -85,3 +91,7 @@ export const aiConfigured = Boolean(env.ANTHROPIC_API_KEY);
 
 export const metaRedirectUri =
   env.META_REDIRECT_URI ?? `${env.APP_URL.replace(/\/$/, "")}/api/integrations/instagram/callback`;
+
+export const googleOAuthConfigured = Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET);
+export const googleRedirectUri =
+  env.GOOGLE_REDIRECT_URI ?? `${env.APP_URL.replace(/\/$/, "")}/api/auth/google/callback`;

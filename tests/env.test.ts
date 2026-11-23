@@ -118,4 +118,39 @@ describe("optional credential env values", () => {
     const url = new URL(authorizeUrl("test-state"));
     expect(url.searchParams.get("scope")).toBe("instagram_business_basic,instagram_content_publish");
   });
+
+  it("treats empty or whitespace-only Google sign-in credentials as unset", async () => {
+    stubEnv({ GOOGLE_CLIENT_ID: "", GOOGLE_CLIENT_SECRET: "   " });
+    vi.resetModules();
+    const { env, googleOAuthConfigured } = await import("@/lib/env");
+    expect(env.GOOGLE_CLIENT_ID).toBeUndefined();
+    expect(env.GOOGLE_CLIENT_SECRET).toBeUndefined();
+    expect(googleOAuthConfigured).toBe(false);
+  });
+
+  it("enables Google sign-in only when both client credentials are present", async () => {
+    stubEnv({ GOOGLE_CLIENT_ID: "google-client-id" });
+    vi.resetModules();
+    expect((await import("@/lib/env")).googleOAuthConfigured).toBe(false);
+
+    vi.unstubAllEnvs();
+    stubEnv({ GOOGLE_CLIENT_ID: "google-client-id", GOOGLE_CLIENT_SECRET: "google-client-secret" });
+    vi.resetModules();
+    expect((await import("@/lib/env")).googleOAuthConfigured).toBe(true);
+  });
+
+  it("derives the Google redirect URI from APP_URL without a trailing slash", async () => {
+    stubEnv({ APP_URL: "https://app.example.test/" });
+    vi.resetModules();
+    const { googleRedirectUri } = await import("@/lib/env");
+    expect(googleRedirectUri).toBe("https://app.example.test/api/auth/google/callback");
+  });
+
+  it("uses an explicit Google redirect URI when provided", async () => {
+    stubEnv({ GOOGLE_REDIRECT_URI: "https://other.example.test/oauth/google/callback" });
+    vi.resetModules();
+    const { env, googleRedirectUri } = await import("@/lib/env");
+    expect(env.GOOGLE_REDIRECT_URI).toBe("https://other.example.test/oauth/google/callback");
+    expect(googleRedirectUri).toBe("https://other.example.test/oauth/google/callback");
+  });
 });
