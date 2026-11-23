@@ -83,6 +83,24 @@ Stage 3 combined gates on 2026-11-19: backend `177 passed` (156 pre-existing + 1
 
 Stage 3 residuals: `POST /api/whop/webhook` is an explicit 501 `(Next)` stub — signature verification, idempotency and a sale/payout ledger remain a later cut; the live Whop adapter is still unverified without a sandbox key; the publish response's `is_first_product` is the server-derived value, never the client's; `email_domain` is `null` when unset; mock `get_product` intentionally exposes no URL.
 
+## Weekly unlock quota and Pro subscription (2026-11-23)
+
+Authorized product feature, recorded as D23 in `DECISIONS.md`. Goal: a Minea/AutoDS-style user experience — anyone can browse and filter real Instagram creator data; viewing a full creator profile consumes one of 10 free unlocks per org per UTC week; at the limit the workspace is nudged to a $29/month Pro subscription paid through the already-connected Stripe env vars, with no env-var knowledge exposed to end users.
+
+Bounded atoms, in execution order (each has tests, `npm run verify`, an independent judge verdict and its own squash-merged PR):
+
+| Atom | Scope | Status |
+| --- | --- | --- |
+| BILL-00 | Decision + plan record | In progress |
+| BILL-01 | `creator_unlocks` and `org_entitlements` schema, `0010` migration with down, forced RLS | Not started |
+| BILL-02 | Server-side weekly quota core: UTC ISO week, 10/org/week, idempotent unlock, Pro bypass | Not started |
+| BILL-03 | $29/month Stripe Checkout subscription route + fail-closed entitlement lookup | Not started |
+| BILL-04 | Stripe subscription webhook: signature check, idempotency, activation/renewal/cancellation, audit | Not started |
+| BILL-05 | Creator list banner, detail teaser, unlock action, upgrade CTA | Not started |
+| BILL-06 | E2E paywall smoke + evidence record | Not started |
+
+Invariants: browsing/filtering stays free; no client-supplied org, plan, count or status is trusted; subscription revenue never enters creator split ledger lines; existing one-time product checkout is untouched; unconfigured Stripe fails closed with `503`.
+
 ## Verification strategy
 
 1. **Static gates:** root `npm run typecheck`, `npm run lint`, `npm run test`, `npm run build`; frontend `npm run typecheck`, `npm run build`; backend pytest and `compileall`.
