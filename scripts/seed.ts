@@ -16,6 +16,10 @@ async function main() {
     throw new Error("SEED_PASSWORD must be at least 12 characters.");
   }
 
+  // Compute once and reuse: a fresh hash per branch would make the update path
+  // churn the stored hash on every seed run.
+  const hash = await hashPassword(password);
+
   const pool = new Pool({ connectionString: process.env.DATABASE_URL_ADMIN, application_name: "vistabix-seed" });
   const client = await pool.connect();
   try {
@@ -25,9 +29,10 @@ async function main() {
     let userId: string;
     if (existingUser.rowCount) {
       userId = existingUser.rows[0].id;
+      await client.query("update users set password_hash = $1 where id = $2", [hash, userId]);
       console.log(`• user already exists: ${email}`);
+      console.log("• refreshed password_hash from SEED_PASSWORD");
     } else {
-      const hash = await hashPassword(password);
       const inserted = await client.query(
         "insert into users (email, name, password_hash) values ($1, $2, $3) returning id",
         [email, "Workspace Owner", hash],
