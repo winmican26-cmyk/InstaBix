@@ -7,8 +7,8 @@ import { db, withOrg } from "@/lib/db";
 import { consents, creatorAccounts, memberships, orgs, users } from "@/lib/db/schema";
 import { insertAudit } from "@/lib/audit";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { logger } from "@/lib/logger";
 import { clientIpFromHeaders } from "@/lib/http";
+import { ACTION_FAILURE_MESSAGES, reportActionFailure } from "@/lib/action-errors";
 import { createSession } from "@/lib/auth/session";
 import { CREATOR_ROLE } from "@/lib/auth/roles";
 import { hashPassword } from "@/lib/auth/password";
@@ -27,13 +27,6 @@ export type CreatorSignupState = {
   error?: string;
   fieldErrors?: Record<string, string>;
 };
-
-const DB_UNAVAILABLE = "The database is unavailable. Please try again shortly.";
-
-function dbUnavailable(event: string, error: unknown): CreatorSignupState {
-  logger.error(event, { message: error instanceof Error ? error.message : "unknown" });
-  return { error: DB_UNAVAILABLE };
-}
 
 export async function creatorSignupAction(
   _prev: CreatorSignupState,
@@ -65,7 +58,7 @@ export async function creatorSignupAction(
       CREATOR_SIGNUP_RATE_WINDOW_SECONDS,
     );
   } catch (error) {
-    return dbUnavailable("creator.signup.rate_limit_failed", error);
+    return { error: reportActionFailure("creator.signup.rate_limit_failed", error, ACTION_FAILURE_MESSAGES.application) };
   }
   if (!limit.ok) return { error: "Too many accounts created from this network. Try again later." };
 
@@ -74,7 +67,7 @@ export async function creatorSignupAction(
   try {
     orgRows = await db.select({ id: orgs.id }).from(orgs).where(eq(orgs.slug, slug)).limit(1);
   } catch (error) {
-    return dbUnavailable("creator.signup.org_lookup_failed", error);
+    return { error: reportActionFailure("creator.signup.org_lookup_failed", error, ACTION_FAILURE_MESSAGES.application) };
   }
   const org = orgRows[0];
   if (!org) return { error: "Creator registration is not open yet. The workspace operator still needs to finish setup." };
@@ -97,7 +90,7 @@ export async function creatorSignupAction(
       ),
     ]);
   } catch (error) {
-    return dbUnavailable("creator.signup.dedupe_failed", error);
+    return { error: reportActionFailure("creator.signup.dedupe_failed", error, ACTION_FAILURE_MESSAGES.application) };
   }
   if (emailRows.length) return { fieldErrors: { email: "An account already exists for this email." } };
   if (handleRows.length) return { fieldErrors: { username: "That handle is already registered." } };
@@ -171,14 +164,13 @@ export async function creatorSignupAction(
       return { userId: user.id, orgId: org.id };
     });
   } catch (error) {
-    logger.error("creator.signup.failed", { message: error instanceof Error ? error.message : "unknown" });
-    return { error: "Could not create your creator account. Please try again." };
+    return { error: reportActionFailure("creator.signup.failed", error, ACTION_FAILURE_MESSAGES.application) };
   }
 
   try {
     await createSession(session.userId, session.orgId);
   } catch (error) {
-    return dbUnavailable("creator.signup.session_failed", error);
+    return { error: reportActionFailure("creator.signup.session_failed", error, ACTION_FAILURE_MESSAGES.signIn) };
   }
 
   redirect("/creator");
