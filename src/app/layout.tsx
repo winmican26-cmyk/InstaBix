@@ -36,11 +36,19 @@ export const viewport: Viewport = {
 
 const themeScript = `(function(){try{var t=localStorage.getItem("ibx-theme");if(t!=="light"&&t!=="dark"){t="dark"}document.documentElement.dataset.theme=t;}catch(e){}})();`;
 
+/**
+ * The OAuth callback uses a benign ?signin=google marker so hosting layers that
+ * copy the callback query onto query-less redirects cannot leak the one-time
+ * code. Strip the marker (and any copied OAuth params) before the page renders.
+ */
+const oauthCleanupScript = `(function(){try{var u=new URL(location.href);if(u.searchParams.get("signin")!=="google")return;["signin","code","state","iss","scope","authuser","hd","prompt"].forEach(function(k){u.searchParams.delete(k)});history.replaceState(null,"",u.pathname+(u.search&&u.search!=="?"?u.search:"")+u.hash)}catch(e){}})();`;
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" data-theme="dark" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        <script dangerouslySetInnerHTML={{ __html: oauthCleanupScript }} />
       </head>
       <body className={`${sans.variable} ${display.variable} ${mono.variable} min-h-dvh font-sans antialiased`}>
         <a

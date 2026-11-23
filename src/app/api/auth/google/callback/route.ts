@@ -146,5 +146,9 @@ export async function GET(request: Request): Promise<Response> {
 
   const creatorOnly =
     first?.role === CREATOR_ROLE && !membershipRows.some((row) => canAccessOperator(row.role));
-  return finish(request, creatorOnly ? "/creator" : first ? "/dashboard" : "/onboarding");
+  const destination = creatorOnly ? "/creator" : first ? "/dashboard" : "/onboarding";
+  // The hosting layer copies the incoming callback query onto redirects whose
+  // target has no query string. A benign marker keeps the one-time Google code
+  // and state out of the browser's address bar.
+  return finish(request, `${destination}?signin=google`);
 }
