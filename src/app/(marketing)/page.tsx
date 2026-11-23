@@ -4,7 +4,6 @@ import {
   ArrowRight,
   BadgeCheck,
   BookOpen,
-  CircleDollarSign,
   FileCheck2,
   Fingerprint,
   Handshake,
@@ -33,7 +32,7 @@ const loop = [
   { step: "03", title: "Score with evidence", body: "Engagement, consistency and monetisation signals, each with a factor breakdown.", icon: Fingerprint },
   { step: "04", title: "Approve the outreach", body: "A human approves every message. Caps, suppression and unsubscribe are enforced server-side.", icon: MailCheck },
   { step: "05", title: "Build in their voice", body: "Outline, approval, draft, citations back to real source material, creator sign-off.", icon: BookOpen },
-  { step: "06", title: "Split to the cent", body: "Stripe handles checkout. An immutable ledger handles the split, refunds and statements.", icon: Split },
+  { step: "06", title: "Split to the cent", body: "When Stripe checkout is configured, the workspace ledger records sales, creator shares and refunds.", icon: Split },
 ];
 
 export default function HomePage() {
@@ -44,7 +43,7 @@ export default function HomePage() {
           <div className="absolute left-1/2 top-0 h-[520px] w-[900px] -translate-x-1/2 rounded-full bg-violet/[0.09] blur-[110px]" />
           <div className="absolute bottom-0 right-0 size-[360px] rounded-full bg-lime/[0.05] blur-[100px]" />
         </div>
-        <div className="relative mx-auto grid max-w-6xl gap-12 px-5 py-20 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:py-28">
+        <div className="relative mx-auto max-w-6xl px-5 py-20 sm:px-6 lg:py-28">
           <div>
             <Badge tone="lime" className="mb-5">
               <ShieldCheck className="size-3" /> Consent-first by design
@@ -58,7 +57,7 @@ export default function HomePage() {
             </h1>
             <p className="mt-6 max-w-lg text-[15px] leading-7 text-muted">
               VistaBix is the operating system for creator partnerships: find people whose audience is already asking,
-              build the product they should have made, and pay them through a ledger that cannot fudge a cent.
+              build products with them, and track what each partner earns in the workspace ledger.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <Button asChild size="lg">
@@ -81,54 +80,6 @@ export default function HomePage() {
                 <Scale className="size-3" /> Auditable money
               </span>
             </p>
-          </div>
-
-          <div className="relative">
-            <div className="absolute -inset-4 -z-10 rounded-[28px] bg-gradient-to-br from-violet/15 via-transparent to-lime/10 blur-2xl" />
-            <div className="card overflow-hidden p-0 shadow-lift">
-              <div className="flex items-center justify-between border-b border-line px-4 py-3">
-                <div className="flex items-center gap-2">
-                  <span className="size-2 rounded-full bg-danger/70" />
-                  <span className="size-2 rounded-full bg-amber/70" />
-                  <span className="size-2 rounded-full bg-lime/80" />
-                </div>
-                <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-faint">Partnership pipeline</span>
-              </div>
-              <div className="space-y-2 p-4">
-                {[
-                  { label: "Creator applies", meta: "Consent recorded", icon: Users, tone: "lime" },
-                  { label: "Public metrics", meta: "Instagram Graph API", icon: Instagram, tone: "violet" },
-                  { label: "Explainable score", meta: "3 weighted factors", icon: Fingerprint, tone: "lime" },
-                  { label: "Human-approved send", meta: "Approval gate", icon: MailCheck, tone: "violet" },
-                  { label: "Product draft", meta: "Cited to source", icon: BookOpen, tone: "lime" },
-                  { label: "Split ledger", meta: "To the cent", icon: CircleDollarSign, tone: "violet" },
-                ].map((row, i) => {
-                  const Icon = row.icon;
-                  return (
-                    <div key={row.label} className="flex items-center gap-3 rounded-lg border border-line bg-surface-2/50 px-3 py-2.5">
-                      <span
-                        className={
-                          row.tone === "lime"
-                            ? "grid size-7 place-items-center rounded-md bg-lime/10 text-lime"
-                            : "grid size-7 place-items-center rounded-md bg-violet/10 text-violet"
-                        }
-                      >
-                        <Icon className="size-3.5" strokeWidth={1.75} />
-                      </span>
-                      <div className="min-w-0">
-                        <p className="text-[12.5px] font-semibold text-fg">{row.label}</p>
-                        <p className="font-mono text-[9.5px] uppercase tracking-[0.08em] text-faint">{row.meta}</p>
-                      </div>
-                      <span className="ml-auto font-mono text-[9px] text-faint">0{i + 1}</span>
-                    </div>
-                  );
-                })}
-                <div className="flex items-center justify-between rounded-lg border border-dashed border-line-2 px-3 py-2.5">
-                  <p className="text-[11.5px] text-muted">No sample rows. The workspace starts empty.</p>
-                  <Badge tone="outline">By design</Badge>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       </section>
@@ -156,7 +107,7 @@ export default function HomePage() {
               {
                 bad: "Handshake splits",
                 good: "An immutable ledger",
-                body: "Revenue share arguments end businesses. Sales, fees, refunds and statements are written as ledger entries that reconcile to the cent.",
+                body: "The workspace ledger lets you trace sales, refunds and recorded creator shares.",
               },
             ].map((item) => (
               <div key={item.bad} className="card p-5">
@@ -237,33 +188,23 @@ export default function HomePage() {
             </div>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
-            <div className="card p-4">
-              <p className="label">Operator console</p>
-              <div className="mt-3 space-y-2">
-                {["Creators", "Outreach queue", "Product studio", "Ledger"].map((row) => (
-                  <div key={row} className="flex items-center justify-between rounded-md border border-line bg-surface-2/50 px-2.5 py-2">
-                    <span className="text-[11.5px] text-fg">{row}</span>
-                    <span className="size-1.5 rounded-full bg-lime/70" />
-                  </div>
-                ))}
-                <div className="rounded-md border border-dashed border-line-2 px-2.5 py-2 text-[10.5px] text-faint">
-                  Empty until you connect a real account.
-                </div>
-              </div>
+            <div className="card flex flex-col items-start gap-3 p-5">
+              <h3 className="text-[14px] font-semibold text-fg">Operator workspace</h3>
+              <p className="flex-1 text-[12.5px] leading-6 text-muted">
+                Manage creators, review outreach, and open the product studio.
+              </p>
+              <Button asChild variant="outline" size="sm">
+                <Link href="/login">Sign in to VistaBix</Link>
+              </Button>
             </div>
-            <div className="card mt-0 p-4 sm:mt-8">
-              <p className="label">Creator portal</p>
-              <div className="mt-3 space-y-2">
-                {["Your product", "Review & sign", "Earnings", "Payout status"].map((row) => (
-                  <div key={row} className="rounded-md border border-line bg-surface-2/50 px-2.5 py-2">
-                    <span className="text-[11.5px] text-fg">{row}</span>
-                    <div className="mt-1.5 h-1 w-2/3 rounded-full bg-surface-3" />
-                  </div>
-                ))}
-                <div className="rounded-md border border-line bg-violet/5 px-2.5 py-2 text-[10.5px] text-violet">
-                  Mobile-first, installable
-                </div>
-              </div>
+            <div className="card flex flex-col items-start gap-3 p-5">
+              <h3 className="text-[14px] font-semibold text-fg">Creator partnerships</h3>
+              <p className="flex-1 text-[12.5px] leading-6 text-muted">
+                Learn what you can review before a product goes on sale.
+              </p>
+              <Button asChild variant="outline" size="sm">
+                <Link href="/for-creators">Partnership details</Link>
+              </Button>
             </div>
           </div>
         </div>

@@ -48,10 +48,10 @@ const stages = [
   },
   {
     n: "06",
-    title: "Money moves through one ledger",
+    title: "Sales and creator shares are recorded",
     icon: Split,
-    body: "Stripe Connect handles checkout, KYC and payouts. VistaBix writes sale and refund entries that mirror each other, so the creator statement reconciles to the cent.",
-    gate: "Gate: refunds reverse exactly, never approximately.",
+    body: "When configured, Stripe handles checkout. VistaBix records sales, creator shares and refunds in the workspace ledger.",
+    gate: "Gate: sales are recorded from signed Stripe events.",
   },
 ];
 
@@ -99,7 +99,7 @@ export default function HowItWorksPage() {
             "Send outreach without a lawful basis and a human approval.",
             "Publish a product or contact a creator on your behalf silently.",
             "Show a demo number to make an empty workspace look alive.",
-            "Pay a creator without a signed agreement and a ledger entry.",
+            "Publish a product before the creator signs the agreement.",
           ].map((item) => (
             <div key={item} className="flex gap-2.5 rounded-lg border border-line bg-surface p-3.5">
               <X className="mt-0.5 size-3.5 shrink-0 text-danger" aria-hidden />

@@ -35,7 +35,7 @@ export default function AboutPage() {
         </p>
         <ul>
           <li><strong>Consent-first partnerships:</strong> Real data, voluntary creator agreements, and cryptographic record keeping.</li>
-          <li><strong>Automated & transparent revenue splits:</strong> Enforcing auditable payout splits (such as 60/40 creator-favored first products and 50/50 subsequent products).</li>
+          <li><strong>Auditable revenue splits:</strong> Recording creator and operator shares in the workspace ledger.</li>
           <li><strong>Human-in-the-loop workflows:</strong> Strict guardrails ensuring that every outreach, proposal, and live storefront has human verification.</li>
         </ul>
 
