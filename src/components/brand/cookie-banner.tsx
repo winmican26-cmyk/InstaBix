@@ -37,7 +37,7 @@ export function CookieBanner() {
     <aside
       role="region"
       aria-label="Cookie and Privacy Preferences"
-      className="fixed bottom-0 left-0 right-0 z-50 border-t border-line/80 bg-bg/95 p-4 shadow-2xl backdrop-blur-xl sm:p-5"
+      className="border-b border-line/80 bg-surface p-4 sm:p-5"
     >
       <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
         <div className="max-w-3xl space-y-1 text-[12.5px] leading-relaxed text-muted">

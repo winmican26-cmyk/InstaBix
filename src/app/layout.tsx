@@ -49,8 +49,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         >
           Skip to content
         </a>
-        {children}
         <CookieBanner />
+        {children}
         <Toaster
           theme="system"
           position="bottom-right"
