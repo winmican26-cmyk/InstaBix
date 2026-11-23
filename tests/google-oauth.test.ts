@@ -123,10 +123,31 @@ describe("verifyGoogleIdToken", () => {
     expect(requested.searchParams.get("id_token")).toBe("never-log-this-token-value");
   });
 
+  it("accepts Google's string-valued exp and email_verified fields", async () => {
+    const { verifyGoogleIdToken } = await loadHelpers({ GOOGLE_CLIENT_ID: VALID_CLAIMS.aud });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        tokenInfoResponse({
+          ...VALID_CLAIMS,
+          exp: String(Math.floor(Date.now() / 1000) + 600),
+          email_verified: "true",
+        }),
+      ),
+    );
+    expect(await verifyGoogleIdToken("never-log-this-token-value")).toEqual({
+      sub: "google-sub-123",
+      email: "owner@example.com",
+      name: "Test Owner",
+    });
+  });
+
   it.each([
     ["wrong audience", { ...VALID_CLAIMS, aud: "another-client" }],
     ["wrong issuer", { ...VALID_CLAIMS, iss: "https://evil.example.test" }],
     ["expired token", { ...VALID_CLAIMS, exp: Math.floor(Date.now() / 1000) - 10 }],
+    ["expired string token", { ...VALID_CLAIMS, exp: String(Math.floor(Date.now() / 1000) - 10) }],
+    ["non-numeric exp", { ...VALID_CLAIMS, exp: "not-a-timestamp" }],
     ["unverified email", { ...VALID_CLAIMS, email_verified: false }],
     ["missing email", { ...VALID_CLAIMS, email: "" }],
   ])("rejects %s", async (_label, body) => {

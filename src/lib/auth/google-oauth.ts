@@ -115,9 +115,9 @@ export async function verifyGoogleIdToken(idToken: string): Promise<GoogleClaims
     const claims = (await response.json()) as Record<string, unknown>;
     if (claims.aud !== clientId) return null;
     if (claims.iss !== "https://accounts.google.com" && claims.iss !== "accounts.google.com") return null;
-    if (typeof claims.exp !== "number" || !Number.isFinite(claims.exp) || claims.exp <= Math.floor(Date.now() / 1000)) {
-      return null;
-    }
+    // Google's tokeninfo endpoint returns epoch seconds as a JSON string.
+    const exp = typeof claims.exp === "number" || typeof claims.exp === "string" ? Number(claims.exp) : Number.NaN;
+    if (!Number.isFinite(exp) || exp <= Math.floor(Date.now() / 1000)) return null;
     if (typeof claims.email !== "string" || !claims.email.trim()) return null;
     if (claims.email_verified !== true && claims.email_verified !== "true") return null;
     const sub = typeof claims.sub === "string" ? claims.sub.trim() : "";
