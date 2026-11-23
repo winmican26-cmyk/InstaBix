@@ -20,7 +20,11 @@ insert into creator_accounts (id, org_id, username, source) values
 
 insert into products (id, org_id, creator_id, title, status, price_cents) values
   ('cccccccc-cccc-cccc-cccc-cccccccccccc', '11111111-1111-1111-1111-111111111111', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Published product A', 'published', 4900),
-  ('dddddddd-dddd-dddd-dddd-dddddddddddd', '11111111-1111-1111-1111-111111111111', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Draft product A', 'draft', 4900);
+  ('dddddddd-dddd-dddd-dddd-dddddddddddd', '11111111-1111-1111-1111-111111111111', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Draft product A', 'draft', 4900),
+  ('abababab-abab-abab-abab-abababababab', '22222222-2222-2222-2222-222222222222', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'Published product B', 'published', 4900);
+
+insert into chapters (id, org_id, product_id, position, title) values
+  ('bcbcbcbc-bcbc-bcbc-bcbc-bcbcbcbcbcbc', '22222222-2222-2222-2222-222222222222', 'abababab-abab-abab-abab-abababababab', 1, 'Published chapter B');
 
 insert into portal_tokens (id, org_id, creator_id, token_hash, expires_at) values
   ('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', '11111111-1111-1111-1111-111111111111', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'hash-tenant-a', now() + interval '1 day'),
@@ -72,6 +76,22 @@ select set_config('app.portal_token', '', true);
 set local role vistabix_app;
 select 'public_products' as check, count(*) as rows from products;
 select 'public_drafts' as check, count(*) as rows from products where status = 'draft';
+reset role;
+
+\echo '--- Scoped: org A cannot see org B published product or its chapter ---'
+select set_config('app.org_id', '11111111-1111-1111-1111-111111111111', true);
+set local role vistabix_app;
+select 'scoped_foreign_published_products' as check, count(*) as rows
+  from products where org_id = '22222222-2222-2222-2222-222222222222';
+select 'scoped_foreign_published_chapters' as check, count(*) as rows
+  from chapters where org_id = '22222222-2222-2222-2222-222222222222';
+reset role;
+
+\echo '--- Unscoped storefront: both orgs published, zero drafts ---'
+select set_config('app.org_id', '', true);
+set local role vistabix_app;
+select 'unscoped_public_products' as check, count(*) as rows from products;
+select 'unscoped_public_drafts' as check, count(*) as rows from products where status = 'draft';
 reset role;
 
 \echo '--- Security-definer lookup: provider event resolves its tenant ---'

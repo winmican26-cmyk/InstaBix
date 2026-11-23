@@ -6,6 +6,17 @@ import { decryptSecret, encryptSecret } from "@/lib/crypto";
 import { scoreCreator } from "@/lib/scoring";
 import { logger, errorMessage } from "@/lib/logger";
 import { businessDiscovery, getMedia, getProfile, InstagramError, refreshLongLived, tokenExpiry } from "./client";
+import { checkRateLimit } from "@/lib/rate-limit";
+
+/**
+ * Business Discovery spends the shared Meta discovery token. 25 calls/hour per org
+ * is enough for routine enrichment, while 200/hour across the whole deployment keeps
+ * a conservative global ceiling below typical platform quotas. Both counters live in
+ * Postgres so every serverless instance spends the same shared budget.
+ */
+export const DISCOVERY_PER_ORG_HOURLY_LIMIT = 25;
+export const DISCOVERY_GLOBAL_HOURLY_LIMIT = 200;
+const DISCOVERY_WINDOW_SECONDS = 60 * 60;
 
 type IntegrationRow = typeof integrations.$inferSelect;
 
@@ -97,7 +108,15 @@ export async function syncOwnAccount(orgId: string): Promise<SyncResult> {
   }
 }
 
-export type EnrichResult = { ok: boolean; enriched?: boolean; snapshot?: boolean; error?: string; message?: string };
+export type EnrichResult = {
+  ok: boolean;
+  enriched?: boolean;
+  snapshot?: boolean;
+  error?: string;
+  message?: string;
+  retryAfterSeconds?: number;
+  status?: "not_found" | "not_eligible" | "rate_limited";
+};
 
 /**
  * Enriches one creator from public data only. Media is append-only/upserted, and a
@@ -108,7 +127,33 @@ export async function enrichCreator(orgId: string, creatorId: string): Promise<E
     tx.select().from(creatorAccounts).where(eq(creatorAccounts.id, creatorId)).limit(1),
   );
   if (!creator) return { ok: false, error: "Creator not found." };
-  if (creator.consentStatus === "revoked") return { ok: false, error: "Consent has been revoked. Enrichment is disabled." };
+  if (creator.consentStatus !== "granted") return { ok: false, error: "Consent is not granted. Enrichment is disabled." };
+
+  let limits: Awaited<ReturnType<typeof checkRateLimit>>[];
+  try {
+    limits = await Promise.all([
+      checkRateLimit(`discovery:org:${orgId}:hourly`, DISCOVERY_PER_ORG_HOURLY_LIMIT, DISCOVERY_WINDOW_SECONDS),
+      checkRateLimit("discovery:global:hourly", DISCOVERY_GLOBAL_HOURLY_LIMIT, DISCOVERY_WINDOW_SECONDS),
+    ]);
+  } catch {
+    // Fail closed: without the shared budget check, no Graph request may go out.
+    return {
+      ok: false,
+      error: "Rate limit check unavailable. Try again shortly.",
+      retryAfterSeconds: 60,
+      status: "rate_limited",
+    };
+  }
+  const [orgLimit, globalLimit] = limits;
+  if (!orgLimit || !globalLimit || !orgLimit.ok || !globalLimit.ok) {
+    const retryAfterSeconds = Math.max(orgLimit?.retryAfterSeconds ?? 60, globalLimit?.retryAfterSeconds ?? 60);
+    return {
+      ok: false,
+      error: "Discovery is rate limited. Try again shortly.",
+      retryAfterSeconds,
+      status: "rate_limited",
+    };
+  }
 
   let discovery;
   try {
@@ -116,7 +161,28 @@ export async function enrichCreator(orgId: string, creatorId: string): Promise<E
   } catch (error) {
     const message = errorMessage(error);
     logger.warn("instagram.enrich_failed", { orgId, creatorId, message });
-    return { ok: false, error: message };
+    let status: EnrichResult["status"];
+    let retryAfterSeconds: number | undefined;
+    if (error instanceof InstagramError) {
+      if (error.status === 404 || /not found|no profile/i.test(message)) {
+        status = "not_found";
+      } else if (
+        error.status === 400 ||
+        error.status === 403 ||
+        /not eligible|not a business|professional account|permission|not authorized/i.test(message)
+      ) {
+        status = "not_eligible";
+      } else if (error.status === 429) {
+        status = "rate_limited";
+        retryAfterSeconds = 60;
+      }
+    }
+    return {
+      ok: false,
+      error: message,
+      ...(status ? { status } : {}),
+      ...(retryAfterSeconds ? { retryAfterSeconds } : {}),
+    };
   }
 
   const followers = discovery.profile.followers_count ?? 0;
@@ -148,6 +214,8 @@ export async function enrichCreator(orgId: string, creatorId: string): Promise<E
           postedAt: item.timestamp ? new Date(item.timestamp) : null,
           likeCount: item.like_count ?? 0,
           commentCount: item.comments_count ?? 0,
+          // Views are omitted for some media types; keep SQL NULL, never zero.
+          viewCount: item.view_count ?? null,
           metricsCapturedAt: new Date(),
         })
         .onConflictDoUpdate({
@@ -155,6 +223,7 @@ export async function enrichCreator(orgId: string, creatorId: string): Promise<E
           set: {
             likeCount: item.like_count ?? 0,
             commentCount: item.comments_count ?? 0,
+            viewCount: item.view_count ?? null,
             caption: item.caption ?? null,
             metricsCapturedAt: new Date(),
           },
@@ -201,6 +270,7 @@ export async function recomputeScore(orgId: string, creatorId: string): Promise<
     media: data.rows.map((m) => ({
       likes: m.likeCount,
       comments: m.commentCount,
+      views: m.viewCount ?? null,
       caption: m.caption,
       postedAt: m.postedAt,
     })),

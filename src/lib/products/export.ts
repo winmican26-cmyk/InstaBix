@@ -15,7 +15,7 @@ export async function readProductExport(tx: Tx, orgId: string, productId: string
   const [creator] = await tx
     .select({ username: creatorAccounts.username, displayName: creatorAccounts.displayName })
     .from(creatorAccounts)
-    .where(and(eq(creatorAccounts.id, product.creatorId), eq(creatorAccounts.orgId, orgId)))
+    .where(and(eq(creatorAccounts.id, product.creatorId), eq(creatorAccounts.orgId, orgId), eq(creatorAccounts.consentStatus, "granted")))
     .limit(1);
 
   const chapterRows = await tx

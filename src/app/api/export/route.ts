@@ -1,4 +1,4 @@
-import { asc, desc } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import { withOrg } from "@/lib/db";
 import {
   agreements,
@@ -38,9 +38,14 @@ export async function GET(request: Request) {
         createdAt: creatorAccounts.createdAt,
       })
       .from(creatorAccounts)
+      .where(and(eq(creatorAccounts.orgId, org.id), eq(creatorAccounts.consentStatus, "granted")))
       .orderBy(asc(creatorAccounts.createdAt));
 
-    const productRows = await tx.select().from(products).orderBy(asc(products.createdAt));
+    const productRows = await tx
+      .select()
+      .from(products)
+      .where(eq(products.orgId, org.id))
+      .orderBy(asc(products.createdAt));
     const chapterRows = await tx
       .select({
         id: chapters.id,
@@ -52,11 +57,29 @@ export async function GET(request: Request) {
         wordCount: chapters.wordCount,
       })
       .from(chapters)
+      .where(eq(chapters.orgId, org.id))
       .orderBy(asc(chapters.productId), asc(chapters.position));
-    const orderRows = await tx.select().from(orders).orderBy(asc(orders.createdAt));
-    const ledgerRows = await tx.select().from(ledgerEntries).orderBy(asc(ledgerEntries.createdAt));
-    const agreementRows = await tx.select().from(agreements).orderBy(asc(agreements.createdAt));
-    const auditRows = await tx.select().from(auditEvents).orderBy(desc(auditEvents.createdAt)).limit(5000);
+    const orderRows = await tx
+      .select()
+      .from(orders)
+      .where(eq(orders.orgId, org.id))
+      .orderBy(asc(orders.createdAt));
+    const ledgerRows = await tx
+      .select()
+      .from(ledgerEntries)
+      .where(eq(ledgerEntries.orgId, org.id))
+      .orderBy(asc(ledgerEntries.createdAt));
+    const agreementRows = await tx
+      .select()
+      .from(agreements)
+      .where(eq(agreements.orgId, org.id))
+      .orderBy(asc(agreements.createdAt));
+    const auditRows = await tx
+      .select()
+      .from(auditEvents)
+      .where(eq(auditEvents.orgId, org.id))
+      .orderBy(desc(auditEvents.createdAt))
+      .limit(5000);
 
     await insertAudit(tx, {
       orgId: org.id,

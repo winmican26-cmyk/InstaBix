@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowRight, Download, RefreshCw, Search, Users } from "lucide-react";
 import { requireWorkspace } from "@/lib/auth/session";
 import { listCreators } from "@/lib/db/queries";
+import { parseCreatorListParams } from "@/lib/creators/list-params";
 import { enrichCreatorAction } from "@/lib/actions/creators";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent } from "@/components/ui/card";
@@ -14,6 +15,7 @@ import { Table, TBody, TD, TH, THead, TR, TableShell } from "@/components/ui/tab
 import { Avatar } from "@/components/ui/avatar";
 import { ActionButton } from "@/components/app/action-button";
 import { AddCreatorDialog } from "./add-creator-dialog";
+import { BatchImportDialog } from "./batch-import-dialog";
 import { CREATOR_STATUS_LABEL, SOURCE_LABEL, CONSENT_LABEL } from "@/lib/constants";
 import { formatNumber, timeAgo } from "@/lib/utils";
 
@@ -35,11 +37,32 @@ const STATUS_TONE: Record<string, "lime" | "violet" | "amber" | "danger" | "neut
 export default async function CreatorsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string; source?: string; add?: string }>;
+  searchParams: Promise<{ q?: string; status?: string; source?: string; add?: string; sort?: string; dir?: string; page?: string; min?: string; max?: string }>;
 }) {
   const { org } = await requireWorkspace();
   const params = await searchParams;
-  const creators = await listCreators(org.id, { q: params.q, status: params.status, source: params.source });
+  const parsed = parseCreatorListParams(params);
+  const error = parsed.ok ? null : parsed.error;
+  const listParams = parsed.ok ? parsed.params : null;
+  const result = parsed.ok ? await listCreators(org.id, parsed.params) : null;
+  const creators = result?.rows ?? [];
+  const page = result?.page ?? 1;
+  const pageCount = result?.pageCount ?? 1;
+  const formStatus = listParams?.status ?? params.status;
+
+  const pageHref = (target: number) => {
+    if (!listParams) return "/creators";
+    const query = new URLSearchParams();
+    if (listParams.q) query.set("q", listParams.q);
+    if (listParams.status) query.set("status", listParams.status);
+    if (listParams.source) query.set("source", listParams.source);
+    query.set("sort", listParams.sort);
+    query.set("dir", listParams.dir);
+    if (listParams.minFollowers !== undefined) query.set("min", String(listParams.minFollowers));
+    if (listParams.maxFollowers !== undefined) query.set("max", String(listParams.maxFollowers));
+    query.set("page", String(target));
+    return `/creators?${query.toString()}`;
+  };
 
   const filters = [
     { label: "All", value: undefined },
@@ -58,7 +81,7 @@ export default async function CreatorsPage({
       <PageHeader
         eyebrow="Pipeline"
         title="Creators"
-        description="Every creator has a source, a consent state and a provenance trail. Nothing is imported from a scraped list."
+        description="VistaBix never scrapes Instagram. You supply handles; we enrich them through official Business Discovery."
         actions={
           <>
             <Button asChild variant="secondary" size="sm">
@@ -66,6 +89,7 @@ export default async function CreatorsPage({
                 <Download /> Export CSV
               </Link>
             </Button>
+            <BatchImportDialog />
             <AddCreatorDialog defaultOpen={params.add === "1"} />
           </>
         }
@@ -96,25 +120,54 @@ export default async function CreatorsPage({
           })}
         </nav>
 
-        <form action="/creators" method="get" className="flex w-full max-w-md items-center gap-2">
-          {params.status ? <input type="hidden" name="status" value={params.status} /> : null}
-          <div className="relative flex-1">
+        <form action="/creators" method="get" className="grid w-full grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center lg:max-w-4xl">
+          {formStatus ? <input type="hidden" name="status" value={formStatus} /> : null}
+          <div className="relative col-span-2 sm:min-w-[200px] sm:flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-faint" aria-hidden />
             <Input
               name="q"
-              defaultValue={params.q}
+              defaultValue={listParams?.q ?? params.q}
               placeholder="Search handle or name"
               className="pl-9"
               aria-label="Search creators"
             />
           </div>
-          <Select name="source" defaultValue={params.source ?? ""} aria-label="Filter by source" className="w-40">
+          <Select name="source" defaultValue={listParams?.source ?? params.source ?? ""} aria-label="Filter by source" className="w-40">
             <option value="">Any source</option>
             <option value="applied">Applied</option>
             <option value="invited">Invited</option>
             <option value="manual">Added by you</option>
             <option value="discovery">Discovery</option>
           </Select>
+          <Select name="sort" defaultValue={listParams?.sort ?? "created"} aria-label="Sort creators" className="w-36">
+            <option value="created">Newest</option>
+            <option value="username">Handle</option>
+            <option value="followers">Followers</option>
+            <option value="score">Score</option>
+            <option value="enriched">Recently enriched</option>
+          </Select>
+          <Select name="dir" defaultValue={listParams?.dir ?? "desc"} aria-label="Sort direction" className="w-32">
+            <option value="desc">Newest first</option>
+            <option value="asc">Oldest first</option>
+          </Select>
+          <Input
+            name="min"
+            type="number"
+            min={0}
+            defaultValue={listParams?.minFollowers ?? params.min ?? ""}
+            placeholder="Min followers"
+            aria-label="Min followers"
+            className="w-32"
+          />
+          <Input
+            name="max"
+            type="number"
+            min={0}
+            defaultValue={listParams?.maxFollowers ?? params.max ?? ""}
+            placeholder="Max followers"
+            aria-label="Max followers"
+            className="w-32"
+          />
           <Button type="submit" variant="secondary" size="md">
             Filter
           </Button>
@@ -123,7 +176,11 @@ export default async function CreatorsPage({
 
       <Card>
         <CardContent className="p-0">
-          {creators.length === 0 ? (
+          {error ? (
+            <div role="alert" className="px-4 py-6 text-[13px] text-danger">
+              {error}
+            </div>
+          ) : creators.length === 0 ? (
             hasFilter ? (
               <EmptyState
                 icon={Search}
@@ -231,6 +288,23 @@ export default async function CreatorsPage({
               </Table>
             </TableShell>
           )}
+          {result ? (
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line px-4 py-3">
+              <span className="text-[11.5px] text-muted">Page {page} of {pageCount}</span>
+              <div className="flex items-center gap-2">
+                {page > 1 ? (
+                  <Button asChild variant="secondary" size="sm">
+                    <Link href={pageHref(page - 1)}>Previous</Link>
+                  </Button>
+                ) : null}
+                {page < pageCount ? (
+                  <Button asChild variant="secondary" size="sm">
+                    <Link href={pageHref(page + 1)}>Next</Link>
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 

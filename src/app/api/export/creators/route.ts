@@ -1,4 +1,4 @@
-import { asc, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { withOrg } from "@/lib/db";
 import { creatorAccounts } from "@/lib/db/schema";
 import { getWorkspace } from "@/lib/auth/session";
@@ -33,6 +33,7 @@ export async function GET(request: Request) {
         createdAt: creatorAccounts.createdAt,
       })
       .from(creatorAccounts)
+      .where(and(eq(creatorAccounts.orgId, org.id), eq(creatorAccounts.consentStatus, "granted")))
       .orderBy(asc(creatorAccounts.username));
 
     await insertAudit(tx, {
