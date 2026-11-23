@@ -34,6 +34,18 @@ export function googleCookieOptions() {
   };
 }
 
+/**
+ * Builds a post-login Location from a query-free base. Google sends the one-time
+ * authorization code and state in the callback query; they must never be copied
+ * into the page the user lands on.
+ */
+export function googleRedirectTarget(requestUrl: string, path: string): string {
+  const base = new URL(requestUrl);
+  base.search = "";
+  base.hash = "";
+  return new URL(path, base).toString();
+}
+
 /** PKCE S256: base64url(SHA-256(ASCII(verifier))). */
 export function pkceChallenge(verifier: string): string {
   return createHash("sha256").update(verifier, "ascii").digest("base64url");

@@ -8,6 +8,7 @@ import {
   GOOGLE_OAUTH_COOKIE,
   exchangeGoogleCode,
   googleCookieOptions,
+  googleRedirectTarget,
   inspectGoogleOAuthTransaction,
   verifyGoogleIdToken,
 } from "@/lib/auth/google-oauth";
@@ -30,7 +31,12 @@ async function finish(request: Request, path: string): Promise<Response> {
   // Same path/options as the setter, with an expired maxAge, so the transaction
   // cookie is removed even on error paths.
   jar.set(GOOGLE_OAUTH_COOKIE, "", { ...googleCookieOptions(), maxAge: 0 });
-  return Response.redirect(new URL(path, request.url), 303);
+  // An explicit Location avoids platforms that re-append the incoming callback
+  // query to redirects produced by Response.redirect().
+  return new Response(null, {
+    status: 303,
+    headers: { Location: googleRedirectTarget(request.url, path) },
+  });
 }
 
 function loginError(request: Request, code: string): Promise<Response> {

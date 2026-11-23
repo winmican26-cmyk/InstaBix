@@ -111,6 +111,25 @@ describe("signed OAuth transaction", () => {
   });
 });
 
+describe("googleRedirectTarget", () => {
+  const callbackUrl =
+    "https://vistabix.netlify.app/api/auth/google/callback?state=abc&code=one-time-code&iss=https%3A%2F%2Faccounts.google.com";
+
+  it("drops the callback query from a clean post-login redirect", async () => {
+    const { googleRedirectTarget } = await loadHelpers({ GOOGLE_CLIENT_ID: VALID_CLAIMS.aud });
+    expect(googleRedirectTarget(callbackUrl, "/onboarding")).toBe("https://vistabix.netlify.app/onboarding");
+    expect(googleRedirectTarget(callbackUrl, "/dashboard")).toBe("https://vistabix.netlify.app/dashboard");
+    expect(googleRedirectTarget(callbackUrl, "/creator")).toBe("https://vistabix.netlify.app/creator");
+  });
+
+  it("keeps only the error code on failure redirects", async () => {
+    const { googleRedirectTarget } = await loadHelpers({ GOOGLE_CLIENT_ID: VALID_CLAIMS.aud });
+    expect(googleRedirectTarget(callbackUrl, "/login?error=google_failed")).toBe(
+      "https://vistabix.netlify.app/login?error=google_failed",
+    );
+  });
+});
+
 describe("verifyGoogleIdToken", () => {
   it("accepts a valid tokeninfo response and normalizes the email", async () => {
     const { verifyGoogleIdToken } = await loadHelpers({ GOOGLE_CLIENT_ID: VALID_CLAIMS.aud });
@@ -199,6 +218,12 @@ describe("route and login UI invariants", () => {
     expect(callbackSource).toContain("withOrg(orgId");
     expect(callbackSource).toContain("insertAudit");
     expect(callbackSource).toContain('checkRateLimit(`google:${ip}:${email}`, 8, 15 * 60)');
+  });
+
+  it("callback sets an explicit query-free Location on every terminal branch", () => {
+    expect(callbackSource).toContain("googleRedirectTarget(request.url, path)");
+    expect(callbackSource).toContain("headers: { Location: googleRedirectTarget(request.url, path) }");
+    expect(callbackSource).not.toContain("Response.redirect(new URL(path, request.url)");
   });
 
   it("renders the Google link only behind googleEnabled", () => {
