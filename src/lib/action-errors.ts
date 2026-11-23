@@ -86,10 +86,16 @@ export function isDatabaseUnavailableError(error: unknown): boolean {
 }
 
 export function logActionFailure(event: string, error: unknown): void {
+  // Drizzle wraps the driver error, so the useful SQLSTATE often lives in `cause`.
+  // Keep it server-side and bounded; the client never receives these details.
+  const cause = error && typeof error === "object" ? (error as { cause?: unknown }).cause : undefined;
+  const causeMessage = errorMessage(cause);
   logger.error(event, {
     message: errorMessage(error),
     name: error instanceof Error ? error.name : typeof error,
     code: errorCode(error) ?? null,
+    causeCode: errorCode(cause) ?? null,
+    causeMessage: causeMessage === "Unknown error" ? null : causeMessage.slice(0, 300),
     databaseUnavailable: isDatabaseUnavailableError(error),
   });
 }
