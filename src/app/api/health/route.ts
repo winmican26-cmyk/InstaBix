@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { db } from "@/lib/db";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,11 @@ export async function GET() {
       },
       { headers: { "cache-control": "no-store" } },
     );
-  } catch {
+  } catch (error) {
+    const code = error instanceof Error && "code" in error ? error.code : undefined;
+    logger.warn("health.database_unreachable", {
+      code: typeof code === "string" && /^[A-Z0-9_]{1,48}$/.test(code) ? code : "UNKNOWN",
+    });
     return Response.json(
       { status: "degraded", database: "unreachable", checkedAt: new Date().toISOString() },
       { status: 503, headers: { "cache-control": "no-store" } },
