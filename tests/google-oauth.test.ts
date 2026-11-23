@@ -195,6 +195,7 @@ describe("route and login UI invariants", () => {
   const startSource = readFileSync(new URL("../src/app/api/auth/google/start/route.ts", import.meta.url), "utf8");
   const callbackSource = readFileSync(new URL("../src/app/api/auth/google/callback/route.ts", import.meta.url), "utf8");
   const loginFormSource = readFileSync(new URL("../src/app/(auth)/login/login-form.tsx", import.meta.url), "utf8");
+  const layoutSource = readFileSync(new URL("../src/app/layout.tsx", import.meta.url), "utf8");
 
   it("start route fails closed with a short 503 response when unconfigured", () => {
     expect(startSource).toContain("googleOAuthConfigured");
@@ -220,10 +221,20 @@ describe("route and login UI invariants", () => {
     expect(callbackSource).toContain('checkRateLimit(`google:${ip}:${email}`, 8, 15 * 60)');
   });
 
-  it("callback sets an explicit query-free Location on every terminal branch", () => {
+  it("callback sets an explicit controlled Location on every terminal branch", () => {
     expect(callbackSource).toContain("googleRedirectTarget(request.url, path)");
     expect(callbackSource).toContain("headers: { Location: googleRedirectTarget(request.url, path) }");
     expect(callbackSource).not.toContain("Response.redirect(new URL(path, request.url)");
+    expect(callbackSource).toContain("return finish(request, `${destination}?signin=google`);");
+  });
+
+  it("layout strips the success marker and any copied OAuth params before render", () => {
+    expect(layoutSource).toContain('u.searchParams.get("signin")!=="google"');
+    for (const key of ["signin", "code", "state", "iss", "scope", "authuser", "hd", "prompt"]) {
+      expect(layoutSource).toContain(`"${key}"`);
+    }
+    expect(layoutSource).toContain("history.replaceState(null");
+    expect(layoutSource).toContain("oauthCleanupScript");
   });
 
   it("renders the Google link only behind googleEnabled", () => {
