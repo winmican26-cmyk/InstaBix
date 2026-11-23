@@ -32,5 +32,5 @@ export async function POST(request: Request) {
   await clearSessionCookie();
 
   if (session) logger.info("auth.logout", { userId: session.user.id });
-  return Response.json({ ok: true });
+  return new Response(null, { status: 303, headers: { Location: "/login" } });
 }
