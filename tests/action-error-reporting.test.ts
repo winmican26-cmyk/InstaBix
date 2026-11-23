@@ -80,4 +80,17 @@ describe("action failure reporting", () => {
     expect(entry.databaseUnavailable).toBe(false);
     expect(entry.message).toContain("permission denied");
   });
+
+  it("logs the wrapped driver error for operators without changing the client message", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const root = codedError("42P01", 'relation "rate_limits" does not exist');
+    const wrapped = new Error("Failed query: insert into rate_limits", { cause: root });
+    const clientMessage = reportActionFailure("auth.login.rate_limit_failed", wrapped, ACTION_FAILURE_MESSAGES.signIn);
+
+    expect(clientMessage).toBe(ACTION_FAILURE_MESSAGES.signIn);
+    const entry = JSON.parse(String(spy.mock.calls[0]?.[0])) as Record<string, unknown>;
+    expect(entry.code).toBeNull();
+    expect(entry.causeCode).toBe("42P01");
+    expect(entry.causeMessage).toContain("rate_limits");
+  });
 });
