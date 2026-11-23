@@ -8,7 +8,6 @@ import {
   GOOGLE_OAUTH_COOKIE,
   exchangeGoogleCode,
   googleCookieOptions,
-  googleRedirectTarget,
   inspectGoogleOAuthTransaction,
   verifyGoogleIdToken,
 } from "@/lib/auth/google-oauth";
@@ -25,37 +24,45 @@ export const dynamic = "force-dynamic";
 
 type MembershipRow = { orgId: string; role: Role };
 
-/** Every terminal branch clears the short-lived OAuth cookie. */
-async function finish(request: Request, path: string): Promise<Response> {
+/** Callback query keys that must never survive into the destination URL. */
+const CALLBACK_QUERY_PARAMS = ["signin", "code", "state", "iss", "scope", "authuser", "hd", "prompt"] as const;
+
+/**
+ * Every terminal branch clears the short-lived OAuth cookie and returns a tiny
+ * HTML page instead of a redirect. The hosting layer copies the incoming
+ * callback query onto redirects whose target has no query string, so the page
+ * removes those params in the browser and then navigates to a fixed,
+ * server-controlled destination.
+ */
+async function finish(path: string): Promise<Response> {
   const jar = await cookies();
   // Same path/options as the setter, with an expired maxAge, so the transaction
   // cookie is removed even on error paths.
   jar.set(GOOGLE_OAUTH_COOKIE, "", { ...googleCookieOptions(), maxAge: 0 });
-  // An explicit Location avoids platforms that re-append the incoming callback
-  // query to redirects produced by Response.redirect().
-  return new Response(null, {
-    status: 303,
-    headers: { Location: googleRedirectTarget(request.url, path) },
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Signing in</title></head><body><script>(function(){var u=new URL(location.href);${JSON.stringify([...CALLBACK_QUERY_PARAMS])}.forEach(function(k){u.searchParams.delete(k)});history.replaceState(null,"",u.pathname+u.search+u.hash);location.replace(${JSON.stringify(path)});})();</script></body></html>`;
+  return new Response(html, {
+    status: 200,
+    headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" },
   });
 }
 
-function loginError(request: Request, code: string): Promise<Response> {
-  return finish(request, `/login?error=${code}`);
+function loginError(code: string): Promise<Response> {
+  return finish(`/login?error=${code}`);
 }
 
 export async function GET(request: Request): Promise<Response> {
-  if (!googleOAuthConfigured) return loginError(request, "google_unavailable");
+  if (!googleOAuthConfigured) return loginError("google_unavailable");
 
   const params = new URL(request.url).searchParams;
-  if (params.get("error")) return loginError(request, "google_invalid");
+  if (params.get("error")) return loginError("google_invalid");
   const code = params.get("code");
   const state = params.get("state");
-  if (!code || !state) return loginError(request, "google_invalid");
+  if (!code || !state) return loginError("google_invalid");
 
   const jar = await cookies();
   const transaction = inspectGoogleOAuthTransaction(jar.get(GOOGLE_OAUTH_COOKIE)?.value, state);
   if (!transaction.verifier) {
-    return loginError(request, transaction.expired ? "google_expired" : "google_invalid");
+    return loginError(transaction.expired ? "google_expired" : "google_invalid");
   }
 
   let claims: Awaited<ReturnType<typeof verifyGoogleIdToken>>;
@@ -66,7 +73,7 @@ export async function GET(request: Request): Promise<Response> {
     if (!claims) throw new Error("Google id_token claims were rejected.");
   } catch (error) {
     logActionFailure("auth.google.callback_failed", error);
-    return loginError(request, "google_failed");
+    return loginError("google_failed");
   }
 
   const email = claims.email.toLowerCase();
@@ -77,9 +84,9 @@ export async function GET(request: Request): Promise<Response> {
     limit = await checkRateLimit(`google:${ip}:${email}`, 8, 15 * 60);
   } catch (error) {
     logActionFailure("auth.google.rate_limit_failed", error);
-    return loginError(request, "google_failed");
+    return loginError("google_failed");
   }
-  if (!limit.ok) return loginError(request, "google_blocked");
+  if (!limit.ok) return loginError("google_blocked");
 
   let user: User | undefined;
   let membershipRows: MembershipRow[] = [];
@@ -115,7 +122,7 @@ export async function GET(request: Request): Promise<Response> {
       .orderBy(asc(memberships.createdAt));
   } catch (error) {
     logActionFailure("auth.google.provision_failed", error);
-    return loginError(request, "google_failed");
+    return loginError("google_failed");
   }
 
   const first = membershipRows[0];
@@ -124,7 +131,7 @@ export async function GET(request: Request): Promise<Response> {
     await createSession(user.id, orgId);
   } catch (error) {
     logActionFailure("auth.google.session_failed", error);
-    return loginError(request, "google_failed");
+    return loginError("google_failed");
   }
 
   if (orgId) {
@@ -147,8 +154,5 @@ export async function GET(request: Request): Promise<Response> {
   const creatorOnly =
     first?.role === CREATOR_ROLE && !membershipRows.some((row) => canAccessOperator(row.role));
   const destination = creatorOnly ? "/creator" : first ? "/dashboard" : "/onboarding";
-  // The hosting layer copies the incoming callback query onto redirects whose
-  // target has no query string. A benign marker keeps the one-time Google code
-  // and state out of the browser's address bar.
-  return finish(request, `${destination}?signin=google`);
+  return finish(destination);
 }

@@ -111,25 +111,6 @@ describe("signed OAuth transaction", () => {
   });
 });
 
-describe("googleRedirectTarget", () => {
-  const callbackUrl =
-    "https://vistabix.netlify.app/api/auth/google/callback?state=abc&code=one-time-code&iss=https%3A%2F%2Faccounts.google.com";
-
-  it("drops the callback query from a clean post-login redirect", async () => {
-    const { googleRedirectTarget } = await loadHelpers({ GOOGLE_CLIENT_ID: VALID_CLAIMS.aud });
-    expect(googleRedirectTarget(callbackUrl, "/onboarding")).toBe("https://vistabix.netlify.app/onboarding");
-    expect(googleRedirectTarget(callbackUrl, "/dashboard")).toBe("https://vistabix.netlify.app/dashboard");
-    expect(googleRedirectTarget(callbackUrl, "/creator")).toBe("https://vistabix.netlify.app/creator");
-  });
-
-  it("keeps only the error code on failure redirects", async () => {
-    const { googleRedirectTarget } = await loadHelpers({ GOOGLE_CLIENT_ID: VALID_CLAIMS.aud });
-    expect(googleRedirectTarget(callbackUrl, "/login?error=google_failed")).toBe(
-      "https://vistabix.netlify.app/login?error=google_failed",
-    );
-  });
-});
-
 describe("verifyGoogleIdToken", () => {
   it("accepts a valid tokeninfo response and normalizes the email", async () => {
     const { verifyGoogleIdToken } = await loadHelpers({ GOOGLE_CLIENT_ID: VALID_CLAIMS.aud });
@@ -221,11 +202,36 @@ describe("route and login UI invariants", () => {
     expect(callbackSource).toContain('checkRateLimit(`google:${ip}:${email}`, 8, 15 * 60)');
   });
 
-  it("callback sets an explicit controlled Location on every terminal branch", () => {
-    expect(callbackSource).toContain("googleRedirectTarget(request.url, path)");
-    expect(callbackSource).toContain("headers: { Location: googleRedirectTarget(request.url, path) }");
-    expect(callbackSource).not.toContain("Response.redirect(new URL(path, request.url)");
-    expect(callbackSource).toContain("return finish(request, `${destination}?signin=google`);");
+  it("callback returns a clean HTML 200 response with no redirect header", () => {
+    expect(callbackSource).toContain("new Response(html");
+    expect(callbackSource).toContain("status: 200");
+    expect(callbackSource).toContain('"content-type": "text/html; charset=utf-8"');
+    expect(callbackSource).toContain("location.replace(");
+    expect(callbackSource).not.toContain("Location");
+    expect(callbackSource).not.toContain("status: 303");
+    expect(callbackSource).not.toContain("Response.redirect(");
+    expect(callbackSource).not.toContain("googleRedirectTarget");
+    expect(callbackSource).not.toContain("signin=google");
+  });
+
+  it("callback strips every OAuth callback param before navigating", () => {
+    expect(callbackSource).toContain(
+      'const CALLBACK_QUERY_PARAMS = ["signin", "code", "state", "iss", "scope", "authuser", "hd", "prompt"] as const;',
+    );
+    for (const key of ["signin", "code", "state", "iss", "scope", "authuser", "hd", "prompt"]) {
+      expect(callbackSource).toContain(`"${key}"`);
+    }
+    expect(callbackSource).toContain("JSON.stringify([...CALLBACK_QUERY_PARAMS])");
+    expect(callbackSource).toContain("u.searchParams.delete(k)");
+    expect(callbackSource).toContain('history.replaceState(null,"",u.pathname+u.search+u.hash)');
+    expect(callbackSource).toContain("JSON.stringify(path)");
+  });
+
+  it("callback keeps the role-based destination and passes it only through finish", () => {
+    expect(callbackSource).toContain('creatorOnly ? "/creator" : first ? "/dashboard" : "/onboarding"');
+    expect(callbackSource).toContain("canAccessOperator(row.role)");
+    expect(callbackSource).toContain("return finish(destination);");
+    expect(callbackSource).not.toContain("finish(request,");
   });
 
   it("layout strips the success marker and any copied OAuth params before render", () => {
