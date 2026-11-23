@@ -196,6 +196,16 @@
 - Dashboard wireframe: the pasted hard-coded figures, example product word count and “Build Kit” tab are legacy artifacts explicitly excluded by `BUILD_PROMPT.md` and `AUDIT.md`. The shipped dashboard derives every card from org-scoped database rows, measures word counts on save, stores sequences and daily caps as real rows, keeps human approval and suppression gates, and reports locked config values from `GET /api/settings` rather than a client banner.
 - No new endpoint, environment variable, migration, navigation item, demo row or fabricated metric was introduced. Existing locks from D03, D05, D06, D08, D17, D19 and D20 remain unchanged.
 
+## D23 — Weekly creator unlock quota and Pro subscription (2026-11-23)
+
+- Free tier allows **10 creator unlocks per org per UTC ISO week** (week starts Monday 00:00 UTC). Browsing, filtering, search and pagination stay free; revealing a creator's full detail (profile, snapshot, media, products, messages, agreements, campaigns) consumes one unlock.
+- Unlocks are org-scoped and recorded server-side in `creator_unlocks` with a unique `(org_id, creator_id, week_start)` key. Re-opening an already-unlocked creator in the same week never consumes a second unlock. No client-supplied count, plan or org id is trusted.
+- Pro tier is a **$29 USD / month** recurring subscription created with the already-connected `STRIPE_SECRET_KEY` using inline `price_data`. No new env var, OAuth dependency, cookie jar or second payment provider is introduced. `STRIPE_WEBHOOK_SECRET` verifies subscription events before any entitlement change.
+- Entitlements are org-scoped in `org_entitlements`. Only an active Stripe subscription whose `current_period_end` is in the future bypasses the quota; `canceled`, `past_due`, `unpaid`, `incomplete` and missing subscriptions do not.
+- End users never see credentials or env-variable names. The paywall shows the price and an upgrade action only. A missing or invalid Stripe configuration fails closed with `503` and grants no entitlement.
+- Stripe webhook idempotency reuses the existing global `webhookEvents (provider, external_id)` unique key. Checkout activation, renewal, cancellation and past-due transitions are recorded in the org audit log.
+- The existing one-time `/api/checkout` product purchase and its ledger/split rules are unchanged. Subscription revenue is a SaaS entitlement, not a creator sale, and never produces creator split ledger lines.
+
 ## Deliberately not done in this session
 
 - No legacy kit code was imported, adapted into production, or shipped.
