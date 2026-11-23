@@ -10,9 +10,9 @@ export default async function WorkspaceLayout({ children }: { children: React.Re
   const orgs = memberships.map((m) => ({ id: m.org.id, name: m.org.name, role: m.role }));
 
   return (
-    <div className="app-canvas min-h-dvh">
+    <div className="app-canvas min-h-dvh lg:grid lg:grid-cols-[248px_minmax(0,1fr)]">
       <Sidebar orgName={org.name} role={role} />
-      <div className="lg:pl-[248px]">
+      <div className="min-w-0">
         <Topbar
           orgs={orgs}
           activeOrgId={org.id}

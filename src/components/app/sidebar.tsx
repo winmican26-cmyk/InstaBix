@@ -12,7 +12,7 @@ export function Sidebar({ orgName, role }: { orgName: string; role: string }) {
   const pathname = usePathname();
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-40 hidden w-[248px] flex-col border-r border-line bg-surface/70 backdrop-blur-xl lg:flex">
+    <aside className="sticky top-0 z-40 hidden h-dvh flex-col self-start border-r border-line bg-surface/70 backdrop-blur-xl lg:flex">
       <div className="flex h-14 items-center border-b border-line px-5">
         <Wordmark />
       </div>
