@@ -10,22 +10,12 @@ import { clearSessionCookie, createSession, destroySession, getSessionUser } fro
 import { hashPassword, passwordIssues, verifyPassword } from "@/lib/auth/password";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { insertAudit } from "@/lib/audit";
-import { logger } from "@/lib/logger";
 import { clientIpFromHeaders } from "@/lib/http";
+import { logger } from "@/lib/logger";
+import { ACTION_FAILURE_MESSAGES, logActionFailure, reportActionFailure } from "@/lib/action-errors";
 import { slugify } from "@/lib/utils";
 
 export type AuthState = { error?: string; fieldErrors?: Record<string, string> };
-
-const DB_UNAVAILABLE_ERROR = "The database is unavailable. Please try again shortly.";
-
-function logDbFailure(event: string, error: unknown): void {
-  logger.error(event, { message: error instanceof Error ? error.message : "unknown" });
-}
-
-function dbUnavailable(event: string, error: unknown): AuthState {
-  logDbFailure(event, error);
-  return { error: DB_UNAVAILABLE_ERROR };
-}
 
 const emailSchema = z.string().trim().toLowerCase().email("Enter a valid email address.");
 
@@ -43,7 +33,7 @@ export async function loginAction(_prev: AuthState, formData: FormData): Promise
   try {
     limit = await checkRateLimit(`login:${ip}:${parsed.data}`, 8, 15 * 60);
   } catch (error) {
-    return dbUnavailable("auth.login.rate_limit_failed", error);
+    return { error: reportActionFailure("auth.login.rate_limit_failed", error, ACTION_FAILURE_MESSAGES.signIn) };
   }
   if (!limit.ok) return { error: `Too many attempts. Try again in ${Math.ceil(limit.retryAfterSeconds / 60)} minutes.` };
 
@@ -51,7 +41,7 @@ export async function loginAction(_prev: AuthState, formData: FormData): Promise
   try {
     [user] = await db.select().from(users).where(eq(users.email, parsed.data)).limit(1);
   } catch (error) {
-    return dbUnavailable("auth.login.lookup_failed", error);
+    return { error: reportActionFailure("auth.login.lookup_failed", error, ACTION_FAILURE_MESSAGES.signIn) };
   }
   const generic = { error: "Email or password is incorrect." };
   if (!user) return generic;
@@ -74,7 +64,7 @@ export async function loginAction(_prev: AuthState, formData: FormData): Promise
     await createSession(user.id, orgId);
     await createSessionAudit(orgId, user.id, ip);
   } catch (error) {
-    return dbUnavailable("auth.login.session_failed", error);
+    return { error: reportActionFailure("auth.login.session_failed", error, ACTION_FAILURE_MESSAGES.signIn) };
   }
   redirect(hasMembership ? "/dashboard" : "/onboarding");
 }
@@ -125,7 +115,7 @@ export async function signupAction(_prev: AuthState, formData: FormData): Promis
   try {
     existing = await db.select({ id: users.id }).from(users).where(eq(users.email, parsed.data.email)).limit(1);
   } catch (error) {
-    return dbUnavailable("auth.signup.lookup_failed", error);
+    return { error: reportActionFailure("auth.signup.lookup_failed", error, ACTION_FAILURE_MESSAGES.workspace) };
   }
   if (existing.length) return { fieldErrors: { email: "An account already exists for this email." } };
 
@@ -134,7 +124,7 @@ export async function signupAction(_prev: AuthState, formData: FormData): Promis
   try {
     limit = await checkRateLimit(`signup:${ip}`, 5, 60 * 60);
   } catch (error) {
-    return dbUnavailable("auth.signup.rate_limit_failed", error);
+    return { error: reportActionFailure("auth.signup.rate_limit_failed", error, ACTION_FAILURE_MESSAGES.workspace) };
   }
   if (!limit.ok) return { error: "Too many workspaces created from this network. Try again later." };
 
@@ -171,8 +161,7 @@ export async function signupAction(_prev: AuthState, formData: FormData): Promis
       return user.id;
     });
   } catch (error) {
-    logger.error("signup.failed", { message: error instanceof Error ? error.message : "unknown" });
-    return { error: "Could not create your workspace. Please try again." };
+    return { error: reportActionFailure("signup.failed", error, ACTION_FAILURE_MESSAGES.workspace) };
   }
 
   try {
@@ -184,7 +173,7 @@ export async function signupAction(_prev: AuthState, formData: FormData): Promis
       await createSession(userId, membership.orgId);
     }
   } catch (error) {
-    return dbUnavailable("auth.signup.session_failed", error);
+    return { error: reportActionFailure("auth.signup.session_failed", error, ACTION_FAILURE_MESSAGES.signIn) };
   }
   redirect("/onboarding");
 }
@@ -194,13 +183,13 @@ export async function signOutAction(): Promise<void> {
   try {
     session = await getSessionUser();
   } catch (error) {
-    logDbFailure("auth.logout.session_lookup_failed", error);
+    logActionFailure("auth.logout.session_lookup_failed", error);
   }
 
   try {
     await destroySession();
   } catch (error) {
-    logDbFailure("auth.logout.session_destroy_failed", error);
+    logActionFailure("auth.logout.session_destroy_failed", error);
   }
   await clearSessionCookie();
 
