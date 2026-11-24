@@ -16,6 +16,9 @@ import {
 } from "lucide-react";
 import { Instagram } from "@/components/brand/instagram-glyph";
 import { requireWorkspace } from "@/lib/auth/session";
+import { canRevealCreator } from "@/lib/billing/access";
+import { getQuotaState, hasUnlocked } from "@/lib/billing/quota";
+import { getCreatorTeaser } from "@/lib/creators/teaser";
 import { getCreatorDetail } from "@/lib/db/queries";
 import {
   deleteCreatorAction,
@@ -37,6 +40,7 @@ import { ActionButton } from "@/components/app/action-button";
 import { StatusSelect } from "./status-select";
 import { ContactForm } from "./contact-form";
 import { PortalLinkButton } from "./portal-link-button";
+import { UnlockPanel } from "../unlock-panel";
 import { CREATOR_STATUS_LABEL, MESSAGE_STATUS_LABEL, PRODUCT_STATUS_LABEL, SOURCE_LABEL, CONSENT_LABEL } from "@/lib/constants";
 import { formatDateTime, formatNumber, timeAgo } from "@/lib/utils";
 import { excerpt } from "@/lib/text";
@@ -47,6 +51,38 @@ export const dynamic = "force-dynamic";
 export default async function CreatorDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { org, role } = await requireWorkspace();
   const { id } = await params;
+  const quota = await getQuotaState(org.id);
+  const unlocked = await hasUnlocked(org.id, id);
+  const revealed = canRevealCreator(quota, unlocked);
+
+  if (!revealed) {
+    const teaser = await getCreatorTeaser(org.id, id);
+    if (!teaser) notFound();
+    const canManage = role === "owner" || role === "admin";
+    return (
+      <div className="space-y-6">
+        <Button asChild variant="ghost" size="sm" className="-ml-2 mb-3">
+          <Link href="/creators">
+            <ArrowLeft /> All creators
+          </Link>
+        </Button>
+        <PageHeader
+          eyebrow={`Creator · ${SOURCE_LABEL[teaser.source] ?? teaser.source}`}
+          title={teaser.displayName ?? `@${teaser.username}`}
+          description={`@${teaser.username}${teaser.niche ? ` · ${teaser.niche}` : ""} · added ${formatDateTime(teaser.createdAt)}`}
+          meta={<Avatar name={teaser.displayName ?? teaser.username} size="lg" />}
+        />
+        <UnlockPanel
+          creatorId={teaser.id}
+          username={teaser.username}
+          remaining={quota.remaining}
+          limit={quota.limit}
+          canManage={canManage}
+        />
+      </div>
+    );
+  }
+
   const data = await getCreatorDetail(org.id, id);
   if (!data) notFound();
 
