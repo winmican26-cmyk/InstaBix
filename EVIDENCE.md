@@ -689,3 +689,135 @@ Residual observations, none blocking acceptance:
 ### 16.5 Human gate
 
 The user explicitly approved applying migration `0006_studio_intelligence.sql` to the local Postgres before runtime/E2E verification. No commit or deployment was performed.
+
+## 17. Weekly unlock paywall — BILL-00..06 (2026-11-23/24)
+
+D23 in `DECISIONS.md` authorizes the feature. Six squash-merged PRs (#22–#27) cover the decision record, schema/RLS, quota core, Pro checkout route, subscription webhook and UI. BILL-06 is PR #28 and adds the focused E2E smoke and this durable record. Counts marked "carried forward" come from the earlier atoms in this session chain; they were not re-derived from those commits by BILL-06.
+
+### 17.1 Compact atom register
+
+| Atom | Producer verdict | Independent judge verdict |
+| --- | --- | --- |
+| BILL-00 | PASS — decision D23 and atom plan recorded | ACCEPT (prior atom in this session chain) |
+| BILL-01 | PASS — unlock/entitlement tables, `0010` migration + down, forced RLS | ACCEPT (prior atom in this session chain) |
+| BILL-02 | PASS — UTC ISO week, 10/org/week, idempotent unlock, Pro bypass | ACCEPT (prior atom in this session chain) |
+| BILL-03 | PASS — $29/month Checkout route, fail-closed entitlement lookup | ACCEPT (prior atom in this session chain) |
+| BILL-04 | PASS — Stripe webhook signature, idempotency, activation/renewal/cancellation, audit | ACCEPT (prior atom in this session chain) |
+| BILL-05 | PASS — quota banner, detail teaser, unlock action, upgrade CTA | ACCEPT (prior atom in this session chain) |
+| BILL-06 | PASS — 2 focused Playwright tests passed; `npm run verify` green | **ACCEPT** — independent re-review after the REQUEST-CHANGES corrections; see §17.4 |
+
+### 17.2 Exact commands and results from this session
+
+```text
+git log --oneline -6
+e1f259b feat: gate full creator detail behind weekly unlock or Pro (#27)
+73273ca feat: activate Pro entitlement from Stripe subscription webhooks (#26)
+0d75ca7 feat: add 29 dollar monthly Pro subscription checkout (#25)
+087c8a2 feat: add server-side weekly creator unlock quota (#24)
+54e0f1c feat: add org-scoped unlock and entitlement tables with RLS (#23)
+a587bb7 docs: record weekly unlock quota and Pro subscription decision (D23) (#22)
+
+verify counts carried forward from this session chain:
+after BILL-03: 28 test files / 225 tests
+after BILL-05: 32 test files / 270 tests
+BILL-06 re-run: 32 test files / 270 tests (below)
+```
+
+Focused paywall smoke (container `instabix-postgres` was already running; Playwright reused/started the dev server via `playwright.config.ts`):
+
+```text
+npx playwright test e2e/paywall.spec.ts
+[WebServer] ⚠ Warning: Next.js ignored pnpm-lock.yaml in C:\Users\mican because it is outside the current Git repository (C:\Users\mican\Documents\InstaBix).
+[WebServer]  To use this directory, set `turbopack.root` in your Next.js config.
+
+Running 2 tests using 1 worker
+
+[WebServer] (node:7976) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+[WebServer] (Use `node --trace-deprecation ...` to show where the warning was created)
+  ok 1 [chromium] › e2e\paywall.spec.ts:112:3 › weekly unlock paywall › teaser then unlock reveals full creator detail (5.5s)
+  ok 2 [chromium] › e2e\paywall.spec.ts:152:3 › weekly unlock paywall › zero remaining shows upgrade CTA instead of unlock (2.1s)
+
+  2 passed (18.1s)
+```
+
+The first focused run was `2 skipped`: a prerequisite probe showed the seed owner has one `owner` membership but `CREATOR_COUNT 0`, so the locked-creator link could not exist. No database reset or re-seed was performed. The spec now creates short-lived creators with a dedicated `e2e_paywall_` username prefix via the admin `pg.Client`, fills the 10-creator quota fixture when the workspace has fewer, and deletes those rows plus all seed-org `creator_unlocks` in `finally`. Only `SEED_EMAIL` and `DATABASE_URL_ADMIN` are read from `.env.local`/env; no secret value is printed or stored. No Stripe request, checkout submission or charge occurred.
+
+```text
+npm run verify
+> vistabix@0.1.0 typecheck   tsc --noEmit        clean
+> vistabix@0.1.0 lint        eslint .            3 warnings, 0 errors
+    src\app\(app)\integrations\page.tsx:27:10 'FileText' unused
+    src\app\(app)\integrations\page.tsx:27:20 'ShieldCheck' unused
+    src\app\(marketing)\legal\dsr\page.tsx:2:8 'Link' unused
+> vistabix@0.1.0 test        vitest run
+ Test Files  32 passed (32)
+      Tests  270 passed (270)
+   Duration  5.97s
+> vistabix@0.1.0 build       node scripts/build.mjs
+✓ Compiled successfully in 4.1s
+✓ Generating static pages using 15 workers (13/13) in 852ms
+```
+
+Both required gates passed. `git status` before edits was clean on `main` tracking `origin/main`; no commit, push, PR, merge, seed, deploy or production change was made by BILL-06.
+
+### 17.3 Residual items
+
+| Residual | Status |
+| --- | --- |
+| No live Stripe charge or test-mode subscription purchase | Unchanged; no secret key was available or used |
+| No production deploy | Unchanged; all work local |
+| 9 known failures in `e2e/wiring.spec.ts` / `e2e/env-configured.spec.ts` | Pending a separate atom; full `npm run e2e` deliberately not run for BILL-06 |
+| PLAN bounded next steps #3–#6 and #7–#8 | Status unchanged (credentials/app-review prerequisites) |
+| Three pre-existing ESLint unused-import warnings | Non-blocking; `npm run verify` exits 0 |
+| BILL-06 independent judge verdict | ACCEPT after REQUEST-CHANGES corrections; recorded in §17.4 and §17.5 |
+
+### 17.4 Judge REQUEST-CHANGES corrections (BILL-06 producer)
+
+The independent judge returned REQUEST-CHANGES. All corrections are confined to the three allowed files; no source, other test file, commit, push, merge, deploy or charge resulted.
+
+1. Test A ("teaser then unlock reveals full creator detail") now carries the same role prerequisite as Test B: `test.skip(context?.role !== "owner" && context?.role !== "admin", "Seed user is not an owner/admin of the workspace")`, because `unlockCreatorAction` permits only owners/admins.
+2. Both tests now guard the admin URL before any `pg.Client` is created: `new URL(adminUrl).hostname` (brackets normalized) must be exactly `localhost`, `127.0.0.1` or `::1`; malformed URLs and every other hostname skip with `"DATABASE_URL_ADMIN must point at a local/disposable database"`. The current URL's hostname `localhost` on port `55432` passes. No credential or full connection URL is printed or logged; only that benign local host/port is noted here.
+3. Fixture cleanup now uses `starts_with(username, $1)` with the exact `e2e_paywall_` prefix instead of SQL `LIKE` with a `%` wildcard, so `_` cannot act as a wildcard and match unrelated rows. Cleanup remains limited to that prefix plus the explicit fixture UUIDs deleted in each `finally`.
+4. Credential-scope clarification: this spec itself consumes only `SEED_EMAIL` and `DATABASE_URL_ADMIN`. Playwright's existing `e2e/global-setup.ts` separately reads `SEED_PASSWORD` to perform the one shared login and write `test-results/auth-state.json`; the spec never reads or prints that value.
+5. `PLAN.md` stale lines were corrected: the policy no longer says no milestone is marked Done, and M7 now records the focused Playwright paywall smoke while keeping Lighthouse/load/performance CI gaps and the 9 known wiring failures as a separate atom.
+
+The judge row in §17.1 and the pending-judge residual row in §17.3 are intentionally unchanged: this producer does not self-certify an ACCEPT; the lead appends the verdict after re-review. Exact re-run command output is recorded in §17.5.
+
+### 17.5 Post-correction validation (exact output)
+
+```text
+npx playwright test e2e/paywall.spec.ts
+[WebServer] ⚠ Warning: Next.js ignored pnpm-lock.yaml in C:\Users\mican because it is outside the current Git repository (C:\Users\mican\Documents\InstaBix).
+[WebServer]  To use this directory, set `turbopack.root` in your Next.js config.
+
+Running 2 tests using 1 worker
+
+[WebServer] (node:18328) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+[WebServer] (Use `node --trace-deprecation ...` to show where the warning was created)
+  ok 1 [chromium] › e2e\paywall.spec.ts:124:3 › weekly unlock paywall › teaser then unlock reveals full creator detail (5.6s)
+  ok 2 [chromium] › e2e\paywall.spec.ts:166:3 › weekly unlock paywall › zero remaining shows upgrade CTA instead of unlock (2.8s)
+
+  2 passed (23.3s)
+
+npm run verify
+> typecheck  tsc --noEmit                       clean
+> lint       eslint .                           3 warnings, 0 errors
+    src\app\(app)\integrations\page.tsx:27:10 'FileText' unused
+    src\app\(app)\integrations\page.tsx:27:20 'ShieldCheck' unused
+    src\app\(marketing)\legal\dsr\page.tsx:2:8 'Link' unused
+> test       vitest run
+ Test Files  32 passed (32)
+      Tests  270 passed (270)
+   Start at  10:41:33
+   Duration  6.52s
+> build      node scripts/build.mjs
+✓ Compiled successfully in 1771ms
+✓ Generating static pages using 15 workers (13/13) in 816ms
+```
+
+Both required gates pass after the corrections. No Stripe call, checkout submission, charge, commit, push, merge or deploy occurred.
+
+### 17.6 Lead integration record
+
+- Independent judge verdict after the corrections: **ACCEPT** (all seven re-review items satisfied; no out-of-bound changes).
+- Integration PR: #28 (`docs/bill-06-paywall-evidence`). Risk: Medium (E2E + docs). Merge decision follows the standing verified-PR workflow; no payment, schema, auth or deploy gate is waived by this atom.
