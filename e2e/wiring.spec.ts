@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { parse } from "dotenv";
 import { describe, expect, test, type Page } from "@playwright/test";
 import { AUTH_STATE_PATH } from "./auth-state";
 
@@ -32,6 +35,39 @@ const APP_ROUTES = [
 
 const CONTROL_SELECTOR = 'button:visible, a:visible:not([href="#main"]), select:visible, input:visible';
 
+type CredentialKey = "META_APP_ID" | "META_APP_SECRET" | "STRIPE_SECRET_KEY";
+
+/** Presence-only probe; values are never printed, logged or stored. */
+function isConfigured(key: CredentialKey): boolean {
+  const fromProcess = process.env[key];
+  if (fromProcess !== undefined) return fromProcess.trim().length > 0;
+  try {
+    const local = parse(readFileSync(resolve(process.cwd(), ".env.local")))[key];
+    return Boolean(local?.trim());
+  } catch {
+    return false;
+  }
+}
+
+// The banner is client-rendered after hydration and stores consent in
+// localStorage, so one short wait per page is enough; later navigations reuse it.
+const consentHandled = new WeakSet<Page>();
+
+async function dismissCookieBanner(page: Page): Promise<void> {
+  if (consentHandled.has(page)) return;
+  const essential = page.getByRole("button", { name: "Only Essential" });
+  if (!(await essential.isVisible().catch(() => false))) {
+    try {
+      await essential.waitFor({ state: "visible", timeout: 5_000 });
+    } catch {
+      consentHandled.add(page);
+      return;
+    }
+  }
+  await essential.click();
+  consentHandled.add(page);
+}
+
 function watchErrors(page: Page): string[] {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(`pageerror: ${error.message}`));
@@ -47,6 +83,7 @@ async function gotoRoute(page: Page, route: string): Promise<void> {
     try {
       await page.goto(route, { waitUntil: "domcontentloaded" });
       await expect(page.locator("main")).toBeVisible();
+      await dismissCookieBanner(page);
       return;
     } catch (error) {
       lastError = error;
@@ -125,20 +162,42 @@ describe("authenticated routes", () => {
     });
   }
 
-  test("credential-gated endpoints fail closed while env nodes are empty", async ({ page }) => {
+  test("credential-gated endpoints respond according to local env configuration", async ({ page }) => {
+    const metaConfigured = isConfigured("META_APP_ID") && isConfigured("META_APP_SECRET");
+    const stripeConfigured = isConfigured("STRIPE_SECRET_KEY");
+    const webhookSecretConfigured = isConfigured("META_APP_SECRET");
+
     const instagram = await page.request.get("/api/integrations/instagram/start", { maxRedirects: 0 });
-    expect(instagram.status()).toBe(503);
-    expect((await instagram.json()).error).toContain("not configured");
+    if (metaConfigured) {
+      expect(instagram.status()).toBe(303);
+      expect(instagram.headers()["location"] ?? "").toContain("https://www.instagram.com/oauth/authorize");
+    } else {
+      expect(instagram.status()).toBe(503);
+      expect((await instagram.json()).error).toContain("not configured");
+    }
 
-    const checkout = await page.request.post("/api/checkout", { data: {} });
-    expect(checkout.status()).toBe(503);
-    expect((await checkout.json()).error).toContain("not configured");
+    const checkout = await page.request.post("/api/checkout", {
+      form: { productId: "not-a-uuid" },
+      maxRedirects: 0,
+    });
+    if (stripeConfigured) {
+      expect(checkout.status()).toBe(400);
+      expect((await checkout.json()).error).toContain("Unknown product");
+    } else {
+      expect(checkout.status()).toBe(503);
+      expect((await checkout.json()).error).toContain("not configured");
+    }
 
-    const webhook = await page.request.post("/api/webhooks/instagram", { data: {} });
-    expect(webhook.status()).toBe(503);
-    expect((await webhook.json()).error).toContain("META_APP_SECRET");
+    const webhook = await page.request.post("/api/webhooks/instagram", { maxRedirects: 0 });
+    if (webhookSecretConfigured) {
+      expect(webhook.status()).toBe(401);
+      expect((await webhook.json()).error).toContain("Signature verification failed");
+    } else {
+      expect(webhook.status()).toBe(503);
+      expect((await webhook.json()).error).toContain("META_APP_SECRET is not configured");
+    }
 
-    const health = await page.request.get("/api/health");
+    const health = await page.request.get("/api/health", { maxRedirects: 0 });
     expect(health.status()).toBe(200);
     expect((await health.json()).database).toBe("reachable");
   });

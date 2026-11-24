@@ -821,3 +821,143 @@ Both required gates pass after the corrections. No Stripe call, checkout submiss
 
 - Independent judge verdict after the corrections: **ACCEPT** (all seven re-review items satisfied; no out-of-bound changes).
 - Integration PR: #28 (`docs/bill-06-paywall-evidence`). Risk: Medium (E2E + docs). Merge decision follows the standing verified-PR workflow; no payment, schema, auth or deploy gate is waived by this atom.
+
+## 18. E2E-01 — full Playwright suite green (2026-11-24)
+
+| Atom | Goal | Risk | Producer verdict | Judge verdict |
+| --- | --- | --- | --- | --- |
+| `E2E-01` | Make the full `npm run e2e` suite pass by fixing wiring-test cookie-banner and env assumptions only | Medium (E2E + env assertions) | **PASS (logic + flagged full-suite run)** — 19 passed / 1 skipped with `--trace off --timeout 60000`; plain unflagged run blocked by host ENOSPC; `npm run verify` green | **ACCEPT** — after REQUEST-CHANGES docs corrections; human gate approved the environment-only residual |
+
+### 18.1 Verified failures and root causes (before the fix)
+
+The lead's re-run immediately before this atom produced **10 failures / 1 skipped / 9 passed**:
+
+- Seven public-route tests failed with `Control "Apply" ... locator.click: Timeout 5000ms exceeded` (and the same for `/apply` "registering lets you track your application" and `/login` "Back to site"). Playwright error context showed a client-rendered fixed `aside[aria-label="Cookie and Privacy Preferences"]` with `Only Essential` / `Accept All` buttons covering the bottom/footer controls. `src/components/brand/cookie-banner.tsx` renders that banner in a `useEffect` after hydration and stores consent in `localStorage` under `vistabix_cookie_consent_v1`; the wiring suite never dismissed it, so it intercepted clicks.
+- `/creators` failed with `console: Failed to load resource: net::ERR_INSUFFICIENT_RESOURCES` and `ENOSPC` while writing Playwright traces.
+- `/integrations` failed with `Control "Audit log" ... Timeout 5000ms exceeded`; the same overlay was the cause.
+- The fail-closed test received `303` from `/api/integrations/instagram/start` while expecting `503`, because local `.env.local` has Meta credentials configured. The assertion hard-coded the *unconfigured* environment shape.
+
+Disk pressure was traced to generated `test-results/` and `.next/dev/cache/turbopack`; before this atom the lead removed those generated directories (~663 MB free).
+
+### 18.2 Fixes (test-only)
+
+Only `e2e/wiring.spec.ts` changed:
+
+1. `gotoRoute()` now calls a new `dismissCookieBanner(page)` after every `page.goto` and after `main` becomes visible. It looks up `page.getByRole("button", { name: "Only Essential" })`, clicks it when visible, and never clicks `Accept All`. Because the banner hydrates after `domcontentloaded`, the first navigation on each page allows a short visible wait; consent is then persisted in `localStorage`, so later navigations on the same page only need a cheap visibility check. The existing "click every visible control, assert no page errors" loop and selector are unchanged.
+2. The fail-closed test is now env-aware. It reads **only** `META_APP_ID`, `META_APP_SECRET` and `STRIPE_SECRET_KEY` as presence booleans, from `process.env` (falling back to `dotenv.parse` of `.env.local`); no value is printed, logged or stored. All API requests use `maxRedirects: 0`.
+   - `/api/integrations/instagram/start`: unconfigured Meta → 503 with `not configured`; configured → 303 with `location` containing `https://www.instagram.com/oauth/authorize`. No redirect is followed.
+   - `/api/checkout`: form post `{ productId: "not-a-uuid" }`; unconfigured Stripe → 503 `not configured`, configured → 400 `Unknown product`. The invalid UUID is rejected before any lookup, Stripe session creation or redirect.
+   - `/api/webhooks/instagram`: unsigned empty POST; unconfigured secret → 503 `META_APP_SECRET is not configured`, configured → 401 `Signature verification failed`. No event can be stored on either path.
+   - `/api/health` still asserts 200 and `database: "reachable"`.
+
+No application source, `playwright.config.ts`, other test files, package files or migrations were modified.
+
+### 18.3 Environment constraint and exact validation outputs
+
+The machine's `C:` drive stayed nearly full throughout this atom. Plain `npm run e2e` was run four times after removing only `test-results/` and `.next/` before each run; every assertion passed, but background Turbopack cache writes emitted `ENOSPC` / `ERR_INSUFFICIENT_RESOURCES`, which crashed a worker in one run, broke the dev server in another, and pushed the 23-control `/audit` test past the config's 30 s default timeout in two runs (best plain result: **18 passed / 1 skipped / 1 failed**, the sole failure being `/audit` timing out with no assertion error). No config or source file was changed to work around this; the final green run only disables Playwright trace artifacts and raises the runner timeout via CLI flags.
+
+Final green command (exact):
+
+```powershell
+Remove-Item -Recurse -Force -ErrorAction SilentlyContinue test-results, .next
+npm run e2e -- --trace off --timeout 60000
+```
+
+```text
+> vistabix@0.1.0 e2e
+> playwright test --trace off --timeout 60000
+
+[WebServer] ⚠ Warning: Next.js ignored pnpm-lock.yaml in C:\Users\mican because it is outside the current Git repository (C:\Users\mican\Documents\InstaBix).
+[WebServer]  To use this directory, set `turbopack.root` in your Next.js config.
+[WebServer]
+
+Running 20 tests using 1 worker
+
+  -   1 [chromium] › e2e\env-configured.spec.ts:14:3 › configured env states › integrations page shows configured providers
+[WebServer] (node:31460) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+[WebServer] (Use `node --trace-deprecation ...` to show where the warning was created)
+  ok  2 [chromium] › e2e\paywall.spec.ts:124:3 › weekly unlock paywall › teaser then unlock reveals full creator detail (4.5s)
+  ok  3 [chromium] › e2e\paywall.spec.ts:166:3 › weekly unlock paywall › zero remaining shows upgrade CTA instead of unlock (1.4s)
+  ok  4 [chromium] › e2e\wiring.spec.ts:144:5 › public routes › every control on / is wired without a page error (22.1s)
+  ok  5 [chromium] › e2e\wiring.spec.ts:144:5 › public routes › every control on /how-it-works is wired without a page error (14.7s)
+  ok  6 [chromium] › e2e\wiring.spec.ts:144:5 › public routes › every control on /for-creators is wired without a page error (20.4s)
+  ok  7 [chromium] › e2e\wiring.spec.ts:144:5 › public routes › every control on /apply is wired without a page error (3.5s)
+  ok  8 [chromium] › e2e\wiring.spec.ts:144:5 › public routes › every control on /creator/signup is wired without a page error (3.3s)
+  ok  9 [chromium] › e2e\wiring.spec.ts:144:5 › public routes › every control on /login is wired without a page error (2.2s)
+  ok 10 [chromium] › e2e\wiring.spec.ts:144:5 › public routes › every control on /legal/privacy is wired without a page error (22.9s)
+  ok 11 [chromium] › e2e\wiring.spec.ts:144:5 › public routes › every control on /legal/terms is wired without a page error (19.5s)
+  ok 12 [chromium] › e2e\wiring.spec.ts:157:5 › authenticated routes › every control on /dashboard is wired without a page error (15.4s)
+  ok 13 [chromium] › e2e\wiring.spec.ts:157:5 › authenticated routes › every control on /creators is wired without a page error (20.5s)
+  ok 14 [chromium] › e2e\wiring.spec.ts:157:5 › authenticated routes › every control on /outreach is wired without a page error (13.7s)
+  ok 15 [chromium] › e2e\wiring.spec.ts:157:5 › authenticated routes › every control on /studio is wired without a page error (7.3s)
+  ok 16 [chromium] › e2e\wiring.spec.ts:157:5 › authenticated routes › every control on /revenue is wired without a page error (8.5s)
+  ok 17 [chromium] › e2e\wiring.spec.ts:157:5 › authenticated routes › every control on /integrations is wired without a page error (9.6s)
+  ok 18 [chromium] › e2e\wiring.spec.ts:157:5 › authenticated routes › every control on /audit is wired without a page error (31.7s)
+  ok 19 [chromium] › e2e\wiring.spec.ts:157:5 › authenticated routes › every control on /settings is wired without a page error (17.1s)
+  ok 20 [chromium] › e2e\wiring.spec.ts:165:3 › authenticated routes › credential-gated endpoints respond according to local env configuration (1.1s)
+
+  1 skipped
+  19 passed (4.2m)
+```
+
+(The suite also emitted its normal per-control `console.log` lines and several harmless `[WebServer] ⨯ Error: The destination stream errored while writing data.` warnings from the disk-constrained dev server; no page/console error assertion failed.)
+
+Second gate, exact command `npm run verify`, ending-to-end output (ANSI colour codes stripped, per-test stdout logs condensed where noted):
+
+```text
+> vistabix@0.1.0 verify
+> npm run typecheck && npm run lint && npm run test && npm run build
+
+> vistabix@0.1.0 typecheck
+> tsc --noEmit
+
+> vistabix@0.1.0 lint
+> eslint .
+
+C:\Users\mican\Documents\InstaBix\src\app\(app)\integrations\page.tsx
+  27:10  warning  'FileText' is defined but never used. Allowed unused vars must match /^_/u     @typescript-eslint/no-unused-vars
+  27:20  warning  'ShieldCheck' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+C:\Users\mican\Documents\InstaBix\src\app\(marketing)\legal\dsr\page.tsx
+  2:8  warning  'Link' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+✖ 3 problems (0 errors, 3 warnings)
+
+> vistabix@0.1.0 test
+> vitest run
+
+ Test Files  32 passed (32)
+      Tests  270 passed (270)
+   Duration  4.82s
+
+> vistabix@0.1.0 build
+> node scripts/build.mjs
+
+▲ Next.js 16.4.6 (Turbopack)
+- Environments: .env.local
+✓ Compiled successfully in 6.6s
+  Running TypeScript ...
+  Finished TypeScript in 12.9s ...
+✓ Generating static pages using 15 workers (13/13) in 542ms
+```
+
+Both required gates exited 0. The build route table was emitted in full by the command (13 static pages; all API and app routes listed) and is not repeated here.
+
+### 18.4 Scope and safety confirmation
+
+- Files changed: `e2e/wiring.spec.ts`, `PLAN.md`, `EVIDENCE.md` only.
+- No file under `src/**`, `playwright.config.ts`, `e2e/paywall.spec.ts`, `e2e/env-configured.spec.ts`, `package.json` or `drizzle/` was touched. No commit, push, PR, merge, seed, deploy or migration was performed.
+- No Meta OAuth flow was followed and no Stripe Checkout session or charge was created: the Instagram request used `maxRedirects: 0`, checkout used an invalid UUID, and the webhook POST was unsigned with an empty body. No webhook event could be stored.
+- No credential value was printed, stored or invented. Only the presence of three named env keys was probed; the local `.env.local` was left exactly as found.
+- Generated `test-results/` and `.next/` were removed before runs to relieve disk pressure; nothing else was deleted.
+
+### 18.5 Judge verdict and human gate
+
+- Initial verdict: **REQUEST-CHANGES** — code was sound, but PLAN/EVIDENCE overstated plain `npm run e2e` and success criterion 3 was not literally met.
+- Final verdict after docs-only corrections: **ACCEPT** — the flagged full-suite result and host ENOSPC residual are stated accurately, §18.3 history is intact, `git diff --check` is clean apart from Git's LF→CRLF warning, and no out-of-bound files changed.
+- Human gate: the user explicitly approved accepting the flagged green run as an environment-only residual on 2026-11-24. No payment, schema, auth or deploy gate was waived.
+
+### 18.6 Lead integration record
+
+- Integration PR: #29 (`test/e2e-wiring-fixes`). Files integrated: `e2e/wiring.spec.ts`, `PLAN.md`, `EVIDENCE.md` only.
+- Residual: plain unflagged `npm run e2e` remains blocked on this host by Turbopack ENOSPC and the 30s default timeout; the accepted evidence is the flagged run `--trace off --timeout 60000` (19 passed / 1 skipped) plus `npm run verify` exit 0. No `playwright.config.ts` or application source was changed to mask it.
