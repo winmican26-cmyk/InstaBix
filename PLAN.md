@@ -1,7 +1,7 @@
 # VistaBix — Delivery Plan and Milestone Status
 
 **Date:** 2026-11-18  
-**Policy:** a milestone is not marked Done without session evidence. No milestone below is marked Done.
+**Policy:** a milestone is not marked Done without session evidence. The BILL-00..06 atoms below are Done with evidence in `EVIDENCE.md` §17; the milestone rows keep their previously evidenced statuses.
 
 ## Goal
 
@@ -25,7 +25,7 @@ Operate VistaBix as a real-data creator partnership platform: consent-first disc
 | M4 — Outreach | **Partial / Blocked (Stage 1 code accepted)** | Kill switch, fail-closed warmup, 50/day cap, exact 3-email copy, domain/footer compliance, and all five reply actions verified in 13 policy + 11 classify + 40 backend tests | Send one real approved draft, receive a reply, and verify unsubscribe suppression | `RESEND_API_KEY`, verified domain, physical address, 14-day warmup completion, and a real inbox not available; cap is org-scoped; `no_response` needs an orchestration caller |
 | M5 — Product studio | **Partial / Blocked (Stage 1 code accepted)** | Stage 1 research clustering, 3 evidence-quoted concepts with human pick, real 4,500/6,500/10,000-word drafts, fail-closed quality gate, and 4 gated API endpoints verified in 32 backend tests | Generate a cited draft from permitted real source data, complete creator review and e-sign | AI/writer, Google Doc, PDF, and plagiarism-checker credentials unavailable; offline prose is deterministic and templated |
 | M6 — Commerce & splits | **Partial / Blocked (Stage 1 code accepted)** | Root split is server-derived only; backend split math, ordinal override rejection, production 503, per-call Whop audit, retry-once+notify, and blocked asset/link handling verified in 143 backend + 5 root split tests | Run a test-mode purchase, refund, and cent-matched creator statement; run Whop sandbox publish | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and a Whop sandbox key not available; root publish path is not wired to the FastAPI Whop adapter; Whop audit sink is in-memory |
-| M7 — Craft & performance | **Partial** | Frontend uses accessible semantics, explicit states, and a passing Next 16 build; root build passes | Add Playwright E2E, Lighthouse budget checks, and performance CI | No Lighthouse, Playwright, load, or performance CI evidence in this session |
+| M7 — Craft & performance | **Partial** | Frontend uses accessible semantics, explicit states, and a passing Next 16 build; root build passes; focused Playwright paywall smoke `e2e/paywall.spec.ts` passed in this session (BILL-06) | Add Lighthouse budget checks and performance CI; close the remaining E2E wiring failures in a separate atom | No Lighthouse, load, or performance CI evidence; 9 known wiring failures are tracked as a separate atom, not part of BILL-06 |
 | M8 — Launch hardening | **Blocked / Not demonstrated** | Legal pages exist from prior work | Demonstrate backup/restore, load test, security review, incident runbooks, and App Review recording | No backups/restore drill, load test, security review, or App Review recording in this session |
 
 ## Risks
@@ -91,13 +91,15 @@ Bounded atoms, in execution order (each has tests, `npm run verify`, an independ
 
 | Atom | Scope | Status |
 | --- | --- | --- |
-| BILL-00 | Decision + plan record | In progress |
-| BILL-01 | `creator_unlocks` and `org_entitlements` schema, `0010` migration with down, forced RLS | Not started |
-| BILL-02 | Server-side weekly quota core: UTC ISO week, 10/org/week, idempotent unlock, Pro bypass | Not started |
-| BILL-03 | $29/month Stripe Checkout subscription route + fail-closed entitlement lookup | Not started |
-| BILL-04 | Stripe subscription webhook: signature check, idempotency, activation/renewal/cancellation, audit | Not started |
-| BILL-05 | Creator list banner, detail teaser, unlock action, upgrade CTA | Not started |
-| BILL-06 | E2E paywall smoke + evidence record | Not started |
+| BILL-00 | Decision + plan record | Done |
+| BILL-01 | `creator_unlocks` and `org_entitlements` schema, `0010` migration with down, forced RLS | Done |
+| BILL-02 | Server-side weekly quota core: UTC ISO week, 10/org/week, idempotent unlock, Pro bypass | Done |
+| BILL-03 | $29/month Stripe Checkout subscription route + fail-closed entitlement lookup | Done |
+| BILL-04 | Stripe subscription webhook: signature check, idempotency, activation/renewal/cancellation, audit | Done |
+| BILL-05 | Creator list banner, detail teaser, unlock action, upgrade CTA | Done |
+| BILL-06 | E2E paywall smoke + evidence record | Done |
+
+BILL-06 scope note: the paywall smoke is the focused `npx playwright test e2e/paywall.spec.ts` spec. The 9 known failures in `e2e/wiring.spec.ts` / `e2e/env-configured.spec.ts` are tracked as a separate atom and are explicitly not part of BILL-06; the full `npm run e2e` suite was not run for this atom.
 
 Invariants: browsing/filtering stays free; no client-supplied org, plan, count or status is trusted; subscription revenue never enters creator split ledger lines; existing one-time product checkout is untouched; unconfigured Stripe fails closed with `503`.
 
