@@ -6,6 +6,8 @@ import { verifyStripeSignature } from "@/lib/stripe/client";
 import { computeSplit, refundLines, saleLines } from "@/lib/ledger";
 import { insertAudit } from "@/lib/audit";
 import { logger, errorMessage } from "@/lib/logger";
+import { PRO_KIND } from "@/lib/billing/subscription";
+import { applyStripeSubscriptionEvent } from "@/lib/billing/subscription-entitlement";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -28,7 +30,28 @@ export async function POST(request: Request) {
 
   try {
     if (event.type === "checkout.session.completed") {
-      await handlePaid(event.data.object as Stripe.Checkout.Session);
+      const session = event.data.object as Stripe.Checkout.Session;
+      if (session.metadata?.kind === PRO_KIND) {
+        logger.info("billing.checkout_completed", {
+          sessionId: session.id,
+          orgId: session.metadata?.orgId ?? null,
+        });
+      } else {
+        await handlePaid(session);
+      }
+    } else if (
+      event.type === "customer.subscription.created"
+      || event.type === "customer.subscription.updated"
+      || event.type === "customer.subscription.deleted"
+    ) {
+      const subscription = event.data.object as Stripe.Subscription;
+      const deleted = event.type === "customer.subscription.deleted";
+      const action = await applyStripeSubscriptionEvent(subscription, event.id, event.created, deleted);
+      logger.info("stripe.subscription_event", {
+        eventId: event.id,
+        action,
+        status: deleted ? "canceled" : subscription.status,
+      });
     } else if (event.type === "refund.created") {
       await handleRefund(event.data.object as Stripe.Refund);
     } else {
