@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, Download, RefreshCw, Search, Users } from "lucide-react";
 import { requireWorkspace } from "@/lib/auth/session";
+import { canManage } from "@/lib/auth/roles";
+import { getQuotaState } from "@/lib/billing/quota";
+import { listUnlockedCreatorIds } from "@/lib/billing/access";
 import { listCreators } from "@/lib/db/queries";
 import { parseCreatorListParams } from "@/lib/creators/list-params";
 import { enrichCreatorAction } from "@/lib/actions/creators";
@@ -39,7 +42,11 @@ export default async function CreatorsPage({
 }: {
   searchParams: Promise<{ q?: string; status?: string; source?: string; add?: string; sort?: string; dir?: string; page?: string; min?: string; max?: string }>;
 }) {
-  const { org } = await requireWorkspace();
+  const { org, role } = await requireWorkspace();
+  const quota = await getQuotaState(org.id);
+  const unlockedIds = await listUnlockedCreatorIds(org.id);
+  const canManageWorkspace = canManage(role);
+  const needsUnlock = (creatorId: string) => !quota.pro && !unlockedIds.has(creatorId);
   const params = await searchParams;
   const parsed = parseCreatorListParams(params);
   const error = parsed.ok ? null : parsed.error;
@@ -94,6 +101,26 @@ export default async function CreatorsPage({
           </>
         }
       />
+
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line bg-surface-2/40 px-4 py-2.5">
+        <p className="text-[12px] text-muted">
+          {quota.pro
+            ? "VistaBix Pro is active — full creator detail is unlocked for this workspace."
+            : `${quota.remaining} of ${quota.limit} free unlocks left this week. Browsing and filtering stay free.`}
+        </p>
+        {!quota.pro && quota.remaining === 0 ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[12px] font-semibold text-fg">VistaBix Pro — $29 / month</span>
+            {canManageWorkspace ? (
+              <form action="/api/billing/checkout" method="post">
+                <Button type="submit" size="sm">Upgrade to VistaBix Pro</Button>
+              </form>
+            ) : (
+              <span className="text-[11.5px] text-muted">Ask an owner or admin to upgrade.</span>
+            )}
+          </div>
+        ) : null}
+      </div>
 
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <nav aria-label="Filter by status" className="flex flex-wrap gap-1.5">
@@ -275,7 +302,12 @@ export default async function CreatorsPage({
                           >
                             <RefreshCw />
                           </ActionButton>
-                          <Button asChild variant="ghost" size="icon-sm" aria-label={`Open @${creator.username}`}>
+                          <Button
+                            asChild
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={`${needsUnlock(creator.id) ? "Unlock" : "Open"} @${creator.username}`}
+                          >
                             <Link href={`/creators/${creator.id}`}>
                               <ArrowRight />
                             </Link>
