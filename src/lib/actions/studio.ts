@@ -109,7 +109,7 @@ export async function generateOutlineAction(productId: string): Promise<StudioSt
   if (!canReview(role)) return { error: "Your role cannot generate outlines." };
 
   if (!aiConfigured) {
-    return { error: "AI is not configured. Add ANTHROPIC_API_KEY, then try again. Nothing was generated." };
+    return { error: "AI is not configured. Add OPENAI_API_KEY or ANTHROPIC_API_KEY, then try again. Nothing was generated." };
   }
 
   const data = await withOrg(org.id, async (tx) => {

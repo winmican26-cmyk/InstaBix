@@ -120,11 +120,11 @@ export const PROVIDERS = {
     docs: "https://docs.stripe.com/connect",
     limitations: "Creators must complete Stripe onboarding before they can be paid.",
   },
-  anthropic: {
-    name: "AI · Anthropic",
-    description: "Outline and draft generation with structured outputs and citation to real source material.",
-    docs: "https://docs.anthropic.com",
-    limitations: "Generation is human-gated and never publishes automatically.",
+  ai: {
+    name: "AI · OpenAI / Anthropic",
+    description: "OpenAI first, with Anthropic as a configured fallback for product studio and creator analysis.",
+    docs: "https://platform.openai.com/docs",
+    limitations: "A configured API key does not verify connectivity. Generation is human-gated and never publishes automatically.",
   },
 } as const;
 

@@ -44,7 +44,7 @@ export default async function StudioPage({ searchParams }: { searchParams: Promi
 
       {!aiConfigured ? (
         <p className="rounded-lg border border-amber/25 bg-amber/5 p-3.5 text-[12px] leading-5 text-amber">
-          Anthropic is not configured, so outline generation is disabled. Products can still be created and written by hand —
+          No AI provider is configured, so outline generation is disabled. Add OPENAI_API_KEY (preferred) or ANTHROPIC_API_KEY. Products can still be created and written by hand —
           the workspace will never fabricate a draft.
         </p>
       ) : null}

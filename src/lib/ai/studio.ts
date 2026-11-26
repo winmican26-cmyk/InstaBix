@@ -1,7 +1,8 @@
 import "server-only";
-import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
-import { env, aiConfigured } from "@/lib/env";
+import { aiConfigured } from "@/lib/env";
+import { aiModel } from "@/lib/env";
+import { generateJsonText } from "@/lib/ai/provider";
 import { logger, errorMessage } from "@/lib/logger";
 
 const outlineSchema = z.object({
@@ -56,9 +57,7 @@ function extractJson(text: string): unknown {
 }
 
 export async function generateOutline(input: OutlineInput): Promise<{ ok: true; outline: Outline; model: string } | { ok: false; error: string }> {
-  if (!aiConfigured) return { ok: false, error: "AI is not configured. Add ANTHROPIC_API_KEY to enable generation." };
-
-  const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY, maxRetries: 1, timeout: 45_000 });
+  if (!aiConfigured) return { ok: false, error: "AI is not configured. Add OPENAI_API_KEY or ANTHROPIC_API_KEY to enable generation." };
 
   const material = [
     `Creator: ${input.creatorName} (@${input.username})`,
@@ -71,22 +70,7 @@ export async function generateOutline(input: OutlineInput): Promise<{ ok: true; 
   ].join("\n");
 
   try {
-    const message = await client.messages.create({
-      model: env.AI_MODEL,
-      max_tokens: 2200,
-      system: SYSTEM,
-      messages: [
-        {
-          role: "user",
-          content: `Design one product for this creator. Return JSON only.\n\n${material}`,
-        },
-      ],
-    });
-
-    const text = message.content
-      .filter((block): block is Anthropic.TextBlock => block.type === "text")
-      .map((block) => block.text)
-      .join("\n");
+    const { text } = await generateJsonText({ system: SYSTEM, user: `Design one product for this creator. Return JSON only.\n\n${material}`, maxTokens: 2200 });
 
     const parsed = outlineSchema.safeParse(extractJson(text));
     if (!parsed.success) {
@@ -94,7 +78,7 @@ export async function generateOutline(input: OutlineInput): Promise<{ ok: true; 
       return { ok: false, error: "The model returned an invalid outline. Nothing was saved. Try again." };
     }
 
-    return { ok: true, outline: parsed.data, model: env.AI_MODEL };
+    return { ok: true, outline: parsed.data, model: aiModel };
   } catch (error) {
     const message = errorMessage(error);
     logger.error("ai.outline_failed", { message });

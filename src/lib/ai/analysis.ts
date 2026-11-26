@@ -1,7 +1,7 @@
 import "server-only";
-import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
-import { env, aiConfigured } from "@/lib/env";
+import { aiConfigured, aiModel } from "@/lib/env";
+import { generateJsonText } from "@/lib/ai/provider";
 import { logger, errorMessage } from "@/lib/logger";
 
 const demandDraftSchema = z.object({
@@ -89,9 +89,7 @@ export async function analyzeDemand(input: {
   notes: string | null;
   existingProductTitles: string[];
 }): Promise<Result<DemandDraft[]>> {
-  if (!aiConfigured) return { ok: false, error: "AI is not configured. Add ANTHROPIC_API_KEY to enable analysis." };
-
-  const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY, maxRetries: 1, timeout: 45_000 });
+  if (!aiConfigured) return { ok: false, error: "AI is not configured. Add OPENAI_API_KEY or ANTHROPIC_API_KEY to enable analysis." };
 
   const captions = input.captions.slice(0, 12).map((caption) => caption.slice(0, 400));
   const notes = (input.notes ?? "").slice(0, 400);
@@ -108,22 +106,7 @@ export async function analyzeDemand(input: {
   ].join("\n");
 
   try {
-    const message = await client.messages.create({
-      model: env.AI_MODEL,
-      max_tokens: 2200,
-      system: DEMAND_SYSTEM,
-      messages: [
-        {
-          role: "user",
-          content: `Identify demand gaps for this creator. Return JSON only.\n\n${material}`,
-        },
-      ],
-    });
-
-    const text = message.content
-      .filter((block): block is Anthropic.TextBlock => block.type === "text")
-      .map((block) => block.text)
-      .join("\n");
+    const { text } = await generateJsonText({ system: DEMAND_SYSTEM, user: `Identify demand gaps for this creator. Return JSON only.\n\n${material}`, maxTokens: 2200 });
 
     const parsed = demandResponseSchema.safeParse(extractJson(text));
     if (!parsed.success) {
@@ -131,7 +114,7 @@ export async function analyzeDemand(input: {
       return { ok: false, error: "The model returned invalid demand gaps. Nothing was saved. Try again." };
     }
 
-    return { ok: true, data: parsed.data.gaps, model: env.AI_MODEL };
+    return { ok: true, data: parsed.data.gaps, model: aiModel };
   } catch (error) {
     const message = errorMessage(error);
     logger.error("ai.demand_failed", { message });
@@ -144,9 +127,7 @@ export async function extractVoiceDna(input: {
   username: string;
   captions: string[];
 }): Promise<Result<VoiceDraft>> {
-  if (!aiConfigured) return { ok: false, error: "AI is not configured. Add ANTHROPIC_API_KEY to enable analysis." };
-
-  const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY, maxRetries: 1, timeout: 45_000 });
+  if (!aiConfigured) return { ok: false, error: "AI is not configured. Add OPENAI_API_KEY or ANTHROPIC_API_KEY to enable analysis." };
 
   const captions = input.captions.slice(0, 12).map((caption) => caption.slice(0, 400));
 
@@ -159,22 +140,7 @@ export async function extractVoiceDna(input: {
   ].join("\n");
 
   try {
-    const message = await client.messages.create({
-      model: env.AI_MODEL,
-      max_tokens: 1800,
-      system: VOICE_SYSTEM,
-      messages: [
-        {
-          role: "user",
-          content: `Extract the voice DNA for this creator. Return JSON only.\n\n${material}`,
-        },
-      ],
-    });
-
-    const text = message.content
-      .filter((block): block is Anthropic.TextBlock => block.type === "text")
-      .map((block) => block.text)
-      .join("\n");
+    const { text } = await generateJsonText({ system: VOICE_SYSTEM, user: `Extract the voice DNA for this creator. Return JSON only.\n\n${material}`, maxTokens: 1800 });
 
     const parsed = voiceDraftSchema.safeParse(extractJson(text));
     if (!parsed.success) {
@@ -182,7 +148,7 @@ export async function extractVoiceDna(input: {
       return { ok: false, error: "The model returned an invalid voice profile. Nothing was saved. Try again." };
     }
 
-    return { ok: true, data: parsed.data, model: env.AI_MODEL };
+    return { ok: true, data: parsed.data, model: aiModel };
   } catch (error) {
     const message = errorMessage(error);
     logger.error("ai.voice_failed", { message });
@@ -197,9 +163,7 @@ export async function createBuyerPanel(input: {
   gaps: { theme: string; productConcept: string }[];
   voice: { tone: string[]; neverSays: string[] };
 }): Promise<Result<BuyerDraft[]>> {
-  if (!aiConfigured) return { ok: false, error: "AI is not configured. Add ANTHROPIC_API_KEY to enable analysis." };
-
-  const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY, maxRetries: 1, timeout: 45_000 });
+  if (!aiConfigured) return { ok: false, error: "AI is not configured. Add OPENAI_API_KEY or ANTHROPIC_API_KEY to enable analysis." };
 
   const chapters = input.chapters.slice(0, 12).map((chapter) => ({
     title: chapter.title,
@@ -224,22 +188,7 @@ export async function createBuyerPanel(input: {
   ].join("\n");
 
   try {
-    const message = await client.messages.create({
-      model: env.AI_MODEL,
-      max_tokens: 2200,
-      system: BUYER_SYSTEM,
-      messages: [
-        {
-          role: "user",
-          content: `Build a test buyer panel for this product. Return JSON only.\n\n${material}`,
-        },
-      ],
-    });
-
-    const text = message.content
-      .filter((block): block is Anthropic.TextBlock => block.type === "text")
-      .map((block) => block.text)
-      .join("\n");
+    const { text } = await generateJsonText({ system: BUYER_SYSTEM, user: `Build a test buyer panel for this product. Return JSON only.\n\n${material}`, maxTokens: 2200 });
 
     const parsed = buyerResponseSchema.safeParse(extractJson(text));
     if (!parsed.success) {
@@ -247,7 +196,7 @@ export async function createBuyerPanel(input: {
       return { ok: false, error: "The model returned an invalid buyer panel. Nothing was saved. Try again." };
     }
 
-    return { ok: true, data: parsed.data.panel, model: env.AI_MODEL };
+    return { ok: true, data: parsed.data.panel, model: aiModel };
   } catch (error) {
     const message = errorMessage(error);
     logger.error("ai.buyer_panel_failed", { message });

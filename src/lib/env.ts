@@ -36,6 +36,8 @@ const schema = z.object({
   STRIPE_SECRET_KEY: optionalString,
   STRIPE_WEBHOOK_SECRET: optionalString,
 
+  OPENAI_API_KEY: optionalString,
+  OPENAI_MODEL: z.string().default("gpt-4.1-mini"),
   ANTHROPIC_API_KEY: optionalString,
   AI_MODEL: z.string().default("claude-sonnet-4-5"),
 
@@ -87,7 +89,10 @@ export const resendConfigured = Boolean(
   env.RESEND_API_KEY && env.OUTREACH_FROM && env.EMAIL_FROM_DOMAIN && env.OUTREACH_PHYSICAL_ADDRESS,
 );
 export const stripeConfigured = Boolean(env.STRIPE_SECRET_KEY);
-export const aiConfigured = Boolean(env.ANTHROPIC_API_KEY);
+// Prefer OpenAI when both providers are configured; retain Anthropic as fallback.
+export const aiProvider = env.OPENAI_API_KEY ? "openai" : env.ANTHROPIC_API_KEY ? "anthropic" : null;
+export const aiModel = aiProvider === "openai" ? env.OPENAI_MODEL : env.AI_MODEL;
+export const aiConfigured = Boolean(aiProvider);
 
 export const metaRedirectUri =
   env.META_REDIRECT_URI ?? `${env.APP_URL.replace(/\/$/, "")}/api/integrations/instagram/callback`;

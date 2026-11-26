@@ -30,7 +30,7 @@ import { normalizeBuyerDrafts } from "@/lib/analysis/buyers";
 
 type AnalysisState = { error?: string; success?: string };
 
-const AI_NOT_CONFIGURED = "AI is not configured. Add ANTHROPIC_API_KEY, then try again. Nothing was generated.";
+const AI_NOT_CONFIGURED = "AI is not configured. Add OPENAI_API_KEY or ANTHROPIC_API_KEY, then try again. Nothing was generated.";
 
 async function requestIp() {
   const h = await headers();

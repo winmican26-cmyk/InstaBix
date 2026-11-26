@@ -122,10 +122,10 @@ export async function refreshCapabilityAction(): Promise<IntegrationState> {
     instagram: metaConfigured,
     resend: resendConfigured,
     stripe: stripeConfigured,
-    anthropic: aiConfigured,
+    ai: aiConfigured,
   };
   return {
-    success: `Capabilities — Instagram: ${status.instagram ? "configured" : "missing keys"} · Email: ${status.resend ? "configured" : "missing keys"} · Stripe: ${status.stripe ? "configured" : "missing keys"} · AI: ${status.anthropic ? "configured" : "missing keys"} (${org.name})`,
+    success: `Capabilities — Instagram: ${status.instagram ? "keys present" : "missing keys"} · Email: ${status.resend ? "keys present" : "missing keys"} · Stripe: ${status.stripe ? "keys present" : "missing keys"} · AI: ${status.ai ? "provider key present" : "missing keys"} (${org.name})`,
   };
 }
 

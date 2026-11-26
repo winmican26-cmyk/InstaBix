@@ -161,7 +161,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
               <EmptyState
                 icon={Sparkles}
                 title="Outline is empty"
-                description="Generation needs an Anthropic key, a consented creator and public captions. If any are missing, the button reports why instead of inventing chapters."
+                description="Generation needs an AI provider key, a consented creator and public captions. OpenAI is preferred when configured; Anthropic remains available as fallback."
               />
             ) : (
               <ChapterList
@@ -338,7 +338,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
 
         {!aiConfigured ? (
           <Alert tone="warning" title="AI analysis is disabled">
-            Add ANTHROPIC_API_KEY to configure AI. Until then, generation is refused and no analysis is fabricated on this
+            Add OPENAI_API_KEY (preferred) or ANTHROPIC_API_KEY to configure AI. Until then, generation is refused and no analysis is fabricated on this
             page.
           </Alert>
         ) : null}

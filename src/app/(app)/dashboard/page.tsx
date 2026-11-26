@@ -88,9 +88,9 @@ export default async function DashboardPage() {
 
   const capability = [
     { key: "Instagram", configured: metaConfigured, connected: instagramConnected, href: "/integrations" },
-    { key: "Email", configured: resendConfigured, connected: resendConfigured, href: "/integrations" },
-    { key: "Payments", configured: stripeConfigured, connected: stripeConfigured, href: "/integrations" },
-    { key: "AI studio", configured: aiConfigured, connected: aiConfigured, href: "/integrations" },
+    { key: "Email", configured: resendConfigured, connected: false, href: "/integrations" },
+    { key: "Payments", configured: stripeConfigured, connected: false, href: "/integrations" },
+    { key: "AI studio", configured: aiConfigured, connected: false, href: "/integrations" },
   ];
 
   return (

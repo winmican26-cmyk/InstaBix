@@ -14,7 +14,7 @@ type PaletteItem = { href: string; label: string; group: string; icon: LucideIco
 const QUICK: PaletteItem[] = [
   { href: "/creators?add=1", label: "Add a creator", group: "Actions", icon: Plus, keywords: "new creator invite manual" },
   { href: "/studio?new=1", label: "Start a product", group: "Actions", icon: Sparkles, keywords: "studio outline product" },
-  { href: "/integrations", label: "Check integrations", group: "Actions", icon: Search, keywords: "instagram resend stripe anthropic" },
+  { href: "/integrations", label: "Check integrations", group: "Actions", icon: Search, keywords: "instagram resend stripe openai anthropic" },
 ];
 
 const ITEMS: PaletteItem[] = [

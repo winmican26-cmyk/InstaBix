@@ -15,7 +15,7 @@ import { Instagram } from "@/components/brand/instagram-glyph";
 import { requireWorkspace } from "@/lib/auth/session";
 import { getIntegrations } from "@/lib/db/queries";
 import { disconnectInstagramAction, sendTestEmailAction, syncInstagramAction } from "@/lib/actions/integrations";
-import { aiConfigured, metaConfigured, metaDiscoveryConfigured, resendConfigured, stripeConfigured, env } from "@/lib/env";
+import { aiConfigured, aiModel, aiProvider, metaConfigured, metaDiscoveryConfigured, resendConfigured, stripeConfigured, env } from "@/lib/env";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Alert } from "@/components/ui/alert";
@@ -227,20 +227,20 @@ export default async function IntegrationsPage() {
                 <Brain className="size-4" strokeWidth={1.75} />
               </span>
               <div>
-                <CardTitle>AI · Anthropic</CardTitle>
-                <CardDescription>Structured outlines, human-gated</CardDescription>
+                <CardTitle>AI · OpenAI first</CardTitle>
+                <CardDescription>OpenAI is preferred; Anthropic is used when no OpenAI key is set.</CardDescription>
               </div>
             </div>
-            <Badge tone={aiConfigured ? "lime" : "neutral"}>{aiConfigured ? "configured" : "not configured"}</Badge>
+            <Badge tone={aiConfigured ? "amber" : "neutral"}>{aiConfigured ? "API key present · unverified" : "not configured"}</Badge>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Model" value={env.AI_MODEL} mono />
+              <Field label="Selected provider" value={aiProvider ?? "none"} mono />
+              <Field label="Model" value={aiModel} mono />
               <Field label="Output contract" value="zod-validated JSON" />
             </div>
             <p className="text-[11.5px] leading-5 text-faint">
-              Generation never publishes. It proposes an outline that a person must approve, and drafting remains gated by the
-              creator review.
+              A key being present does not prove the provider is reachable. Generation never publishes; proposals require human approval.
             </p>
           </CardContent>
         </Card>

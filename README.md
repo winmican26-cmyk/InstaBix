@@ -136,7 +136,8 @@ The dashboard is a server-rendered page. It reads health, creators, outreach, pr
 | `META_SCOPES` | Optional override of the OAuth scopes requested from Meta |
 | `RESEND_API_KEY`, `OUTREACH_FROM`, `OUTREACH_REPLY_TO`, `OUTREACH_INBOX` | Email integration |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Stripe test-mode integration |
-| `ANTHROPIC_API_KEY`, `AI_MODEL` | Product studio AI |
+| `OPENAI_API_KEY`, `OPENAI_MODEL` | Preferred product studio AI provider |
+| `ANTHROPIC_API_KEY`, `AI_MODEL` | Optional fallback when no OpenAI key is configured |
 | `GOOGLE_DOCS_CLIENT_ID`, `GOOGLE_DOCS_CLIENT_SECRET`, `GOOGLE_DOCS_REFRESH_TOKEN`, `PDF_SERVICE_API_KEY`, `PLAGIARISM_API_KEY`, `AI_DETECTION_API_KEY` | Reserved credential nodes; no adapter reads them yet, so a value alone enables nothing |
 | `SENTRY_DSN`, `POSTHOG_KEY` | Optional observability |
 | `SEED_EMAIL`, `SEED_PASSWORD` | Local seed only |
